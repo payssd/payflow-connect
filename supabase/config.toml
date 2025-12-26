@@ -44,3 +44,12 @@ verify_jwt = false
 
 [functions.mpesa-callback]
 verify_jwt = false
+
+[functions.paystack-update-payment]
+verify_jwt = false
+
+[functions.pesapal-initialize]
+verify_jwt = false
+
+[functions.pesapal-ipn]
+verify_jwt = false

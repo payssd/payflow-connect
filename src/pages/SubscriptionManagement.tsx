@@ -109,6 +109,7 @@ export default function SubscriptionManagement() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
 
   const currentPlan = plans.find(p => p.id === currentOrganization?.subscription_plan) || null;
   const isActive = currentOrganization?.subscription_status === 'active';
@@ -235,6 +236,46 @@ export default function SubscriptionManagement() {
     }
   };
 
+  const handleUpdatePaymentMethod = async () => {
+    if (!currentOrganization) return;
+    
+    setIsUpdatingPayment(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('paystack-update-payment', {
+        body: {
+          organizationId: currentOrganization.id,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+
+      if (data?.error) {
+        if (data.redirect) {
+          toast({
+            title: 'No active subscription',
+            description: 'Please subscribe to a plan first.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        throw new Error(data.error);
+      }
+
+      if (data?.link) {
+        window.location.href = data.link;
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Failed to update payment method',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingPayment(false);
+    }
+  };
+
   const getStatusBadge = () => {
     switch (currentOrganization?.subscription_status) {
       case 'active':
@@ -333,11 +374,18 @@ export default function SubscriptionManagement() {
         </CardContent>
         {(isActive || isTrialing) && (
           <CardFooter className="flex gap-2 border-t pt-6">
-            <Button variant="outline" size="sm" asChild>
-              <a href="mailto:support@payflow.africa">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleUpdatePaymentMethod}
+              disabled={isUpdatingPayment}
+            >
+              {isUpdatingPayment ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
                 <CreditCard className="h-4 w-4 mr-2" />
-                Update Payment Method
-              </a>
+              )}
+              Update Payment Method
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
