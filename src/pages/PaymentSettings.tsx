@@ -9,11 +9,9 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Smartphone, Building2, Save, CreditCard, Shield, ExternalLink, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Loader2, Smartphone, Building2, Save, CreditCard, Shield, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
-interface PaymentSettings {
-  id?: string;
-  organization_id: string;
+interface ManualPaymentSettings {
   mpesa_enabled: boolean;
   mpesa_business_shortcode: string;
   mpesa_account_name: string;
@@ -25,14 +23,14 @@ interface PaymentSettings {
   bank_swift_code: string;
 }
 
-interface GatewayConfig {
-  id?: string;
-  provider: string;
-  is_enabled: boolean;
-  is_live_mode: boolean;
-  public_key: string;
-  secret_key_hint: string;
-  webhook_secret_hint: string;
+interface GatewayState {
+  isEnabled: boolean;
+  isLiveMode: boolean;
+  publicKey: string;
+  secretKey: string;
+  webhookSecret: string;
+  secretKeyHint: string;
+  webhookSecretHint: string;
 }
 
 export default function PaymentSettings() {
@@ -42,9 +40,8 @@ export default function PaymentSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('manual');
   
-  // Manual payment settings
-  const [settings, setSettings] = useState<PaymentSettings>({
-    organization_id: '',
+  // Manual payment settings (stored in payment_gateway_configs with gateway='manual')
+  const [settings, setSettings] = useState<ManualPaymentSettings>({
     mpesa_enabled: false,
     mpesa_business_shortcode: '',
     mpesa_account_name: '',
@@ -57,7 +54,7 @@ export default function PaymentSettings() {
   });
 
   // Gateway configs
-  const [paystackConfig, setPaystackConfig] = useState({
+  const [paystackConfig, setPaystackConfig] = useState<GatewayState>({
     isEnabled: false,
     isLiveMode: false,
     publicKey: '',
@@ -67,7 +64,7 @@ export default function PaymentSettings() {
     webhookSecretHint: '',
   });
 
-  const [flutterwaveConfig, setFlutterwaveConfig] = useState({
+  const [flutterwaveConfig, setFlutterwaveConfig] = useState<GatewayState>({
     isEnabled: false,
     isLiveMode: false,
     publicKey: '',
@@ -95,62 +92,55 @@ export default function PaymentSettings() {
     
     setIsLoading(true);
     
-    // Fetch manual payment settings
-    const { data: paymentData } = await supabase
-      .from('payment_settings')
-      .select('*')
-      .eq('organization_id', currentOrganization.id)
-      .maybeSingle();
-
-    if (paymentData) {
-      setSettings({
-        ...paymentData,
-        mpesa_business_shortcode: paymentData.mpesa_business_shortcode || '',
-        mpesa_account_name: paymentData.mpesa_account_name || '',
-        bank_name: paymentData.bank_name || '',
-        bank_account_name: paymentData.bank_account_name || '',
-        bank_account_number: paymentData.bank_account_number || '',
-        bank_branch: paymentData.bank_branch || '',
-        bank_swift_code: paymentData.bank_swift_code || '',
-      });
-    } else {
-      setSettings(prev => ({
-        ...prev,
-        organization_id: currentOrganization.id,
-      }));
-    }
-
-    // Fetch gateway configs
+    // Fetch all gateway configs including manual settings
     const { data: gatewayData } = await supabase
       .from('payment_gateway_configs')
       .select('*')
       .eq('organization_id', currentOrganization.id);
 
     if (gatewayData) {
-      const paystack = gatewayData.find(g => g.provider === 'paystack');
-      const flutterwave = gatewayData.find(g => g.provider === 'flutterwave');
-
-      if (paystack) {
-        setPaystackConfig({
-          isEnabled: paystack.is_enabled,
-          isLiveMode: paystack.is_live_mode,
-          publicKey: paystack.public_key || '',
-          secretKey: '',
-          webhookSecret: '',
-          secretKeyHint: paystack.secret_key_hint || '',
-          webhookSecretHint: paystack.webhook_secret_hint || '',
+      // Manual payment settings stored as 'manual' gateway
+      const manual = gatewayData.find(g => g.gateway === 'manual');
+      if (manual && manual.config) {
+        const config = manual.config as Record<string, unknown>;
+        setSettings({
+          mpesa_enabled: Boolean(config.mpesa_enabled),
+          mpesa_business_shortcode: String(config.mpesa_business_shortcode || ''),
+          mpesa_account_name: String(config.mpesa_account_name || ''),
+          bank_enabled: Boolean(config.bank_enabled),
+          bank_name: String(config.bank_name || ''),
+          bank_account_name: String(config.bank_account_name || ''),
+          bank_account_number: String(config.bank_account_number || ''),
+          bank_branch: String(config.bank_branch || ''),
+          bank_swift_code: String(config.bank_swift_code || ''),
         });
       }
 
-      if (flutterwave) {
-        setFlutterwaveConfig({
-          isEnabled: flutterwave.is_enabled,
-          isLiveMode: flutterwave.is_live_mode,
-          publicKey: flutterwave.public_key || '',
+      const paystack = gatewayData.find(g => g.gateway === 'paystack');
+      if (paystack && paystack.config) {
+        const config = paystack.config as Record<string, unknown>;
+        setPaystackConfig({
+          isEnabled: paystack.is_active,
+          isLiveMode: Boolean(config.is_live_mode),
+          publicKey: String(config.public_key || ''),
           secretKey: '',
           webhookSecret: '',
-          secretKeyHint: flutterwave.secret_key_hint || '',
-          webhookSecretHint: flutterwave.webhook_secret_hint || '',
+          secretKeyHint: String(config.secret_key_hint || ''),
+          webhookSecretHint: String(config.webhook_secret_hint || ''),
+        });
+      }
+
+      const flutterwave = gatewayData.find(g => g.gateway === 'flutterwave');
+      if (flutterwave && flutterwave.config) {
+        const config = flutterwave.config as Record<string, unknown>;
+        setFlutterwaveConfig({
+          isEnabled: flutterwave.is_active,
+          isLiveMode: Boolean(config.is_live_mode),
+          publicKey: String(config.public_key || ''),
+          secretKey: '',
+          webhookSecret: '',
+          secretKeyHint: String(config.secret_key_hint || ''),
+          webhookSecretHint: String(config.webhook_secret_hint || ''),
         });
       }
     }
@@ -163,8 +153,7 @@ export default function PaymentSettings() {
 
     setIsSaving(true);
     
-    const payload = {
-      organization_id: currentOrganization.id,
+    const configPayload = {
       mpesa_enabled: settings.mpesa_enabled,
       mpesa_business_shortcode: settings.mpesa_business_shortcode || null,
       mpesa_account_name: settings.mpesa_account_name || null,
@@ -176,23 +165,34 @@ export default function PaymentSettings() {
       bank_swift_code: settings.bank_swift_code || null,
     };
 
+    // Check if manual config exists
+    const { data: existing } = await supabase
+      .from('payment_gateway_configs')
+      .select('id')
+      .eq('organization_id', currentOrganization.id)
+      .eq('gateway', 'manual')
+      .maybeSingle();
+
     let error;
-    if (settings.id) {
+    if (existing) {
       const result = await supabase
-        .from('payment_settings')
-        .update(payload)
-        .eq('id', settings.id);
+        .from('payment_gateway_configs')
+        .update({ 
+          config: configPayload,
+          is_active: settings.mpesa_enabled || settings.bank_enabled,
+        })
+        .eq('id', existing.id);
       error = result.error;
     } else {
       const result = await supabase
-        .from('payment_settings')
-        .insert(payload)
-        .select()
-        .single();
+        .from('payment_gateway_configs')
+        .insert({
+          organization_id: currentOrganization.id,
+          gateway: 'manual',
+          config: configPayload,
+          is_active: settings.mpesa_enabled || settings.bank_enabled,
+        });
       error = result.error;
-      if (result.data) {
-        setSettings(prev => ({ ...prev, id: result.data.id }));
-      }
     }
 
     setIsSaving(false);
@@ -243,16 +243,16 @@ export default function PaymentSettings() {
           ...prev,
           secretKey: '',
           webhookSecret: '',
-          secretKeyHint: data.config.secretKeyHint || prev.secretKeyHint,
-          webhookSecretHint: data.config.webhookSecretHint || prev.webhookSecretHint,
+          secretKeyHint: data?.config?.secretKeyHint || prev.secretKeyHint,
+          webhookSecretHint: data?.config?.webhookSecretHint || prev.webhookSecretHint,
         }));
       } else {
         setFlutterwaveConfig(prev => ({
           ...prev,
           secretKey: '',
           webhookSecret: '',
-          secretKeyHint: data.config.secretKeyHint || prev.secretKeyHint,
-          webhookSecretHint: data.config.webhookSecretHint || prev.webhookSecretHint,
+          secretKeyHint: data?.config?.secretKeyHint || prev.secretKeyHint,
+          webhookSecretHint: data?.config?.webhookSecretHint || prev.webhookSecretHint,
         }));
       }
     } catch (err: unknown) {
@@ -480,21 +480,23 @@ export default function PaymentSettings() {
                   />
                 </div>
 
-                <div className="grid gap-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Public Key</Label>
+                    <Label htmlFor="paystack-public">Public Key</Label>
                     <Input
-                      placeholder={paystackConfig.isLiveMode ? 'pk_live_...' : 'pk_test_...'}
+                      id="paystack-public"
+                      placeholder="pk_live_..."
                       value={paystackConfig.publicKey}
                       onChange={(e) => setPaystackConfig(prev => ({ ...prev, publicKey: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Secret Key</Label>
+                    <Label htmlFor="paystack-secret">Secret Key</Label>
                     <div className="relative">
                       <Input
+                        id="paystack-secret"
                         type={showSecrets.paystackSecret ? 'text' : 'password'}
-                        placeholder={paystackConfig.secretKeyHint || (paystackConfig.isLiveMode ? 'sk_live_...' : 'sk_test_...')}
+                        placeholder={paystackConfig.secretKeyHint || 'sk_live_...'}
                         value={paystackConfig.secretKey}
                         onChange={(e) => setPaystackConfig(prev => ({ ...prev, secretKey: e.target.value }))}
                       />
@@ -502,50 +504,19 @@ export default function PaymentSettings() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-1 top-1 h-7 w-7 p-0"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
                         onClick={() => setShowSecrets(prev => ({ ...prev, paystackSecret: !prev.paystackSecret }))}
                       >
                         {showSecrets.paystackSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
-                    {paystackConfig.secretKeyHint && !paystackConfig.secretKey && (
-                      <p className="text-xs text-muted-foreground">Current key: {paystackConfig.secretKeyHint}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Webhook Secret (Optional)</Label>
-                    <div className="relative">
-                      <Input
-                        type={showSecrets.paystackWebhook ? 'text' : 'password'}
-                        placeholder={paystackConfig.webhookSecretHint || 'whsec_...'}
-                        value={paystackConfig.webhookSecret}
-                        onChange={(e) => setPaystackConfig(prev => ({ ...prev, webhookSecret: e.target.value }))}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-1 top-1 h-7 w-7 p-0"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, paystackWebhook: !prev.paystackWebhook }))}
-                      >
-                        {showSecrets.paystackWebhook ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-4">
-                  <Button variant="outline" size="sm" asChild>
-                    <a href="https://dashboard.paystack.com" target="_blank" rel="noopener noreferrer" className="gap-2">
-                      <ExternalLink className="h-4 w-4" />
-                      Paystack Dashboard
-                    </a>
-                  </Button>
-                  <Button onClick={() => handleSaveGateway('paystack')} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save Paystack
-                  </Button>
-                </div>
+                <Button onClick={() => handleSaveGateway('paystack')} disabled={isSaving} className="w-full">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                  Save Paystack Settings
+                </Button>
               </CardContent>
             )}
           </Card>
@@ -567,7 +538,7 @@ export default function PaymentSettings() {
                         </Badge>
                       )}
                     </div>
-                    <CardDescription>Accept payments across Africa</CardDescription>
+                    <CardDescription>Accept cards, M-Pesa, and bank transfers across Africa</CardDescription>
                   </div>
                 </div>
                 <Switch
@@ -589,21 +560,23 @@ export default function PaymentSettings() {
                   />
                 </div>
 
-                <div className="grid gap-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Public Key</Label>
+                    <Label htmlFor="flw-public">Public Key</Label>
                     <Input
-                      placeholder={flutterwaveConfig.isLiveMode ? 'FLWPUBK-...' : 'FLWPUBK_TEST-...'}
+                      id="flw-public"
+                      placeholder="FLWPUBK-..."
                       value={flutterwaveConfig.publicKey}
                       onChange={(e) => setFlutterwaveConfig(prev => ({ ...prev, publicKey: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Secret Key</Label>
+                    <Label htmlFor="flw-secret">Secret Key</Label>
                     <div className="relative">
                       <Input
+                        id="flw-secret"
                         type={showSecrets.flutterwaveSecret ? 'text' : 'password'}
-                        placeholder={flutterwaveConfig.secretKeyHint || (flutterwaveConfig.isLiveMode ? 'FLWSECK-...' : 'FLWSECK_TEST-...')}
+                        placeholder={flutterwaveConfig.secretKeyHint || 'FLWSECK-...'}
                         value={flutterwaveConfig.secretKey}
                         onChange={(e) => setFlutterwaveConfig(prev => ({ ...prev, secretKey: e.target.value }))}
                       />
@@ -611,50 +584,19 @@ export default function PaymentSettings() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-1 top-1 h-7 w-7 p-0"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
                         onClick={() => setShowSecrets(prev => ({ ...prev, flutterwaveSecret: !prev.flutterwaveSecret }))}
                       >
                         {showSecrets.flutterwaveSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
-                    {flutterwaveConfig.secretKeyHint && !flutterwaveConfig.secretKey && (
-                      <p className="text-xs text-muted-foreground">Current key: {flutterwaveConfig.secretKeyHint}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Webhook Secret (Optional)</Label>
-                    <div className="relative">
-                      <Input
-                        type={showSecrets.flutterwaveWebhook ? 'text' : 'password'}
-                        placeholder={flutterwaveConfig.webhookSecretHint || 'Enter webhook secret'}
-                        value={flutterwaveConfig.webhookSecret}
-                        onChange={(e) => setFlutterwaveConfig(prev => ({ ...prev, webhookSecret: e.target.value }))}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-1 top-1 h-7 w-7 p-0"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, flutterwaveWebhook: !prev.flutterwaveWebhook }))}
-                      >
-                        {showSecrets.flutterwaveWebhook ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-4">
-                  <Button variant="outline" size="sm" asChild>
-                    <a href="https://dashboard.flutterwave.com" target="_blank" rel="noopener noreferrer" className="gap-2">
-                      <ExternalLink className="h-4 w-4" />
-                      Flutterwave Dashboard
-                    </a>
-                  </Button>
-                  <Button onClick={() => handleSaveGateway('flutterwave')} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save Flutterwave
-                  </Button>
-                </div>
+                <Button onClick={() => handleSaveGateway('flutterwave')} disabled={isSaving} className="w-full">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                  Save Flutterwave Settings
+                </Button>
               </CardContent>
             )}
           </Card>

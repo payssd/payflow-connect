@@ -41,7 +41,7 @@ interface Invitation {
   id: string;
   email: string;
   role: 'owner' | 'admin' | 'member';
-  status: string;
+  accepted_at: string | null;
   created_at: string;
   expires_at: string;
 }
@@ -107,17 +107,24 @@ export default function TeamSettings() {
         setTeamMembers(membersWithProfiles);
       }
 
-      // Fetch pending invitations
+      // Fetch pending invitations (team_invitations table)
       const { data: invites, error: invitesError } = await supabase
-        .from('organization_invitations')
+        .from('team_invitations')
         .select('*')
         .eq('organization_id', currentOrganization.id)
-        .eq('status', 'pending')
+        .is('accepted_at', null)
         .order('created_at', { ascending: false });
 
       if (invitesError) throw invitesError;
 
-      setInvitations(invites as Invitation[] || []);
+      setInvitations((invites || []).map(inv => ({
+        id: inv.id,
+        email: inv.email,
+        role: inv.role as 'owner' | 'admin' | 'member',
+        accepted_at: inv.accepted_at,
+        created_at: inv.created_at,
+        expires_at: inv.expires_at,
+      })));
     } catch (error: any) {
       console.error('Error fetching team data:', error);
       toast.error('Failed to load team data');
@@ -163,7 +170,7 @@ export default function TeamSettings() {
   const handleCancelInvitation = async (invitationId: string) => {
     try {
       const { error } = await supabase
-        .from('organization_invitations')
+        .from('team_invitations')
         .delete()
         .eq('id', invitationId);
 
@@ -183,7 +190,7 @@ export default function TeamSettings() {
     try {
       // Delete old invitation
       await supabase
-        .from('organization_invitations')
+        .from('team_invitations')
         .delete()
         .eq('id', invitation.id);
 
