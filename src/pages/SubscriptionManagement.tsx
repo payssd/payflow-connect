@@ -115,23 +115,18 @@ export default function SubscriptionManagement() {
   const isTrialing = currentOrganization?.subscription_status === 'trialing';
   const isPastDue = currentOrganization?.subscription_status === 'past_due';
 
-  // Fetch billing history
-  const { data: billingHistory, isLoading: isLoadingHistory } = useQuery({
-    queryKey: ['billing-history', currentOrganization?.id],
-    queryFn: async () => {
-      if (!currentOrganization?.id) return [];
-      const { data, error } = await supabase
-        .from('subscription_payments')
-        .select('*')
-        .eq('organization_id', currentOrganization.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentOrganization?.id,
-  });
+  // Note: Billing history requires a subscription_payments table which isn't set up yet
+  // For now, we'll show an empty state
+  const billingHistory: Array<{
+    id: string;
+    created_at: string;
+    plan_name?: string;
+    billing_period?: string;
+    amount: number;
+    status: string;
+    payment_reference?: string;
+  }> = [];
+  const isLoadingHistory = false;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-US', {

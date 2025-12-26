@@ -32,7 +32,7 @@ export default function AcceptInvitation() {
   const fetchInvitation = async () => {
     try {
       const { data, error } = await supabase
-        .from('organization_invitations')
+        .from('team_invitations')
         .select('*, organizations(name)')
         .eq('token', token)
         .maybeSingle();
@@ -43,8 +43,8 @@ export default function AcceptInvitation() {
         return;
       }
 
-      if (data.status !== 'pending') {
-        setError(`This invitation has already been ${data.status}.`);
+      if (data.accepted_at) {
+        setError('This invitation has already been accepted.');
         setLoading(false);
         return;
       }

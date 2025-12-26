@@ -74,24 +74,24 @@ export function useDashboardStats() {
       // Fetch paid invoices this month
       const { data: paidInvoicesThisMonth } = await supabase
         .from('invoices')
-        .select('id, total, amount_paid')
+        .select('id, total')
         .eq('organization_id', currentOrganization.id)
         .eq('status', 'paid')
         .gte('updated_at', thisMonthStart.toISOString())
         .lte('updated_at', thisMonthEnd.toISOString());
 
-      const paidRevenueThisMonth = paidInvoicesThisMonth?.reduce((sum, inv) => sum + Number(inv.amount_paid || inv.total), 0) || 0;
+      const paidRevenueThisMonth = paidInvoicesThisMonth?.reduce((sum, inv) => sum + Number(inv.total), 0) || 0;
 
       // Fetch paid invoices last month for comparison
       const { data: paidInvoicesLastMonth } = await supabase
         .from('invoices')
-        .select('id, total, amount_paid')
+        .select('id, total')
         .eq('organization_id', currentOrganization.id)
         .eq('status', 'paid')
         .gte('updated_at', lastMonthStart.toISOString())
         .lte('updated_at', lastMonthEnd.toISOString());
 
-      const paidRevenueLastMonth = paidInvoicesLastMonth?.reduce((sum, inv) => sum + Number(inv.amount_paid || inv.total), 0) || 0;
+      const paidRevenueLastMonth = paidInvoicesLastMonth?.reduce((sum, inv) => sum + Number(inv.total), 0) || 0;
       const revenueChange = paidRevenueLastMonth > 0 ? ((paidRevenueThisMonth - paidRevenueLastMonth) / paidRevenueLastMonth) * 100 : 0;
 
       // Fetch expenses by category (for chart)
@@ -120,7 +120,7 @@ export function useDashboardStats() {
         
         const { data: monthInvoices } = await supabase
           .from('invoices')
-          .select('amount_paid, total')
+          .select('total')
           .eq('organization_id', currentOrganization.id)
           .eq('status', 'paid')
           .gte('updated_at', monthStart.toISOString())
@@ -133,7 +133,7 @@ export function useDashboardStats() {
           .gte('expense_date', format(monthStart, 'yyyy-MM-dd'))
           .lte('expense_date', format(monthEnd, 'yyyy-MM-dd'));
 
-        const revenue = monthInvoices?.reduce((sum, inv) => sum + Number(inv.amount_paid || inv.total), 0) || 0;
+        const revenue = monthInvoices?.reduce((sum, inv) => sum + Number(inv.total), 0) || 0;
         const expenseTotal = monthExpenses?.reduce((sum, exp) => sum + Number(exp.amount), 0) || 0;
 
         monthlyRevenue.push({
