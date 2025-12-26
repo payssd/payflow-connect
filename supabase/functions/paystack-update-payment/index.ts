@@ -178,11 +178,44 @@ Deno.serve(async (req) => {
       console.log('No subscription code available for org:', organizationId);
 
       if (org.subscription_status === 'active') {
-        // Return 200 so the client doesn't surface a generic "non-2xx" error.
+        // If subscription is active but we can't find the subscription_code,
+        // fallback to Paystack card verification so Paystack can handle card capture.
+        const callbackUrl = `${req.headers.get('origin')}/subscription/callback?action=update_card`;
+
+        const authResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${paystackSecretKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: org.email,
+            amount: 1, // minimal possible charge (1 cent) for card verification
+            callback_url: callbackUrl,
+            channels: ['card'],
+            metadata: {
+              organization_id: organizationId,
+              action: 'update_payment_method',
+            },
+          }),
+        });
+
+        const authData = await authResponse.json();
+        console.log('Card authorization response (active fallback):', JSON.stringify(authData));
+
+        if (!authData.status) {
+          return new Response(
+            JSON.stringify({ error: authData.message || 'Failed to initialize card update' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         return new Response(
           JSON.stringify({
-            error: 'We could not find your Paystack subscription to generate a card-update link. To update your card, we may need to run a small card verification first.',
-            needs_payment_setup: true,
+            success: true,
+            link: authData.data.authorization_url,
+            type: 'update_card',
+            message: 'Redirecting to Paystack to update your card.',
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
