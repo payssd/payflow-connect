@@ -30,6 +30,7 @@ import {
 import { ALL_COUNTRIES, DEFAULT_COUNTRY, getCountryConfig } from '@/lib/countryConfig';
 import { calculateTax, TaxCalculation } from '@/lib/kenyaTax';
 import { format, addDays } from 'date-fns';
+import jsPDF from 'jspdf';
 
 type OnboardingStep = 'organization' | 'choose-action' | 'payroll-setup' | 'invoice-setup' | 'payroll-preview' | 'invoice-preview' | 'next-steps';
 
@@ -202,6 +203,286 @@ export default function Onboarding() {
     // Refresh organizations to get the new org
     await refreshOrganizations();
     navigate('/dashboard');
+  };
+
+  const handleConnectPayments = async () => {
+    // Save progress and navigate to payment settings
+    await refreshOrganizations();
+    navigate('/settings/payments');
+  };
+
+  const handleDownloadInvoicePdf = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = margin;
+
+    const formatCurrency = (amount: number) => {
+      return new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    };
+
+    // Header - Company Info
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(orgName || 'Your Organization', margin, y);
+    y += 8;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text(orgEmail || '', margin, y);
+    y += 5;
+    doc.text('Kenya', margin, y);
+
+    // Invoice Title
+    y = margin;
+    doc.setFontSize(28);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0);
+    doc.text('INVOICE', pageWidth - margin, y, { align: 'right' });
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text('INV-0001', pageWidth - margin, y, { align: 'right' });
+
+    // Invoice Details Box
+    y = 55;
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin, y, pageWidth - 2 * margin, 35, 3, 3, 'F');
+
+    y += 10;
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text('Issue Date', margin + 10, y);
+    doc.text('Due Date', margin + 60, y);
+    doc.text('Status', margin + 110, y);
+
+    y += 6;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0);
+    doc.text(format(new Date(), 'MMM d, yyyy'), margin + 10, y);
+    doc.text(format(new Date(invoice.dueDate), 'MMM d, yyyy'), margin + 60, y);
+    doc.text('DRAFT', margin + 110, y);
+
+    // Bill To Section
+    y = 105;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100);
+    doc.text('BILL TO', margin, y);
+
+    y += 8;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0);
+    doc.text(invoice.customerName || 'Customer', margin, y);
+
+    // Line Items Table
+    y = 135;
+    const tableWidth = pageWidth - 2 * margin;
+
+    // Table Header
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(margin, y, tableWidth, 10, 2, 2, 'F');
+    y += 7;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100);
+    doc.text('Description', margin + 5, y);
+    doc.text('Amount', pageWidth - margin - 5, y, { align: 'right' });
+
+    y += 12;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0);
+    doc.setFontSize(10);
+    doc.text('Invoice Amount', margin + 5, y);
+    doc.text(formatCurrency(invoice.amount), pageWidth - margin - 5, y, { align: 'right' });
+
+    // Draw separator line
+    y += 5;
+    doc.setDrawColor(230);
+    doc.line(margin, y, pageWidth - margin, y);
+
+    // Totals Section
+    y += 15;
+    const totalsX = pageWidth - margin - 70;
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text('Subtotal', totalsX, y);
+    doc.setTextColor(0);
+    doc.text(formatCurrency(invoice.amount), pageWidth - margin, y, { align: 'right' });
+
+    if (invoice.includeVat) {
+      y += 7;
+      doc.setTextColor(100);
+      doc.text('VAT (16%)', totalsX, y);
+      doc.setTextColor(0);
+      doc.text(formatCurrency(vatAmount), pageWidth - margin, y, { align: 'right' });
+    }
+
+    // Total
+    y += 12;
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(totalsX - 10, y - 6, pageWidth - margin - totalsX + 10, 14, 2, 2, 'F');
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total', totalsX, y + 3);
+    doc.text(formatCurrency(invoiceTotal), pageWidth - margin, y + 3, { align: 'right' });
+
+    // Footer
+    const footerY = doc.internal.pageSize.getHeight() - 15;
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Generated on ${format(new Date(), 'MMMM d, yyyy')}`, pageWidth / 2, footerY, { align: 'center' });
+
+    // Save PDF
+    doc.save('INV-0001.pdf');
+    
+    toast({
+      title: 'Invoice Downloaded',
+      description: 'Your invoice PDF has been downloaded.',
+    });
+  };
+
+  const handleDownloadPayrollPdf = () => {
+    if (!payrollPreview) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = margin;
+
+    const formatCurrency = (amount: number) => {
+      return new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    };
+
+    // Header
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(orgName || 'Your Organization', margin, y);
+    y += 8;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text('Kenya', margin, y);
+
+    // Payslip Title
+    y = margin;
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0);
+    doc.text('PAYSLIP', pageWidth - margin, y, { align: 'right' });
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text(format(new Date(), 'MMMM yyyy'), pageWidth - margin, y, { align: 'right' });
+
+    // Employee Info
+    y = 55;
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin, y, pageWidth - 2 * margin, 25, 3, 3, 'F');
+
+    y += 10;
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text('Employee Name', margin + 10, y);
+    doc.text('Employment Type', margin + 80, y);
+
+    y += 6;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0);
+    doc.text(employee.fullName, margin + 10, y);
+    doc.text(employee.employmentType.charAt(0).toUpperCase() + employee.employmentType.slice(1), margin + 80, y);
+
+    // Earnings
+    y = 95;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100);
+    doc.text('EARNINGS', margin, y);
+
+    y += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0);
+    doc.text('Gross Pay', margin, y);
+    doc.text(formatCurrency(payrollPreview.grossPay), pageWidth - margin, y, { align: 'right' });
+
+    // Deductions
+    y += 20;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100);
+    doc.text('STATUTORY DEDUCTIONS', margin, y);
+
+    y += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0);
+
+    doc.text('PAYE', margin, y);
+    doc.text(`- ${formatCurrency(payrollPreview.paye)}`, pageWidth - margin, y, { align: 'right' });
+
+    y += 7;
+    doc.text('NSSF', margin, y);
+    doc.text(`- ${formatCurrency(payrollPreview.nssf)}`, pageWidth - margin, y, { align: 'right' });
+
+    y += 7;
+    doc.text('NHIF / Housing Levy', margin, y);
+    doc.text(`- ${formatCurrency(payrollPreview.nhif)}`, pageWidth - margin, y, { align: 'right' });
+
+    // Net Pay
+    y += 20;
+    doc.setFillColor(220, 252, 231);
+    doc.roundedRect(margin, y - 5, pageWidth - 2 * margin, 18, 3, 3, 'F');
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(22, 163, 74);
+    doc.text('NET PAY', margin + 10, y + 7);
+    doc.text(formatCurrency(payrollPreview.netPay), pageWidth - margin - 10, y + 7, { align: 'right' });
+
+    // Disclaimer
+    y += 35;
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text('This is an estimated payslip based on Kenya statutory rules.', margin, y);
+    y += 4;
+    doc.text('Verify all calculations before filing with KRA.', margin, y);
+
+    // Footer
+    const footerY = doc.internal.pageSize.getHeight() - 15;
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Generated on ${format(new Date(), 'MMMM d, yyyy')}`, pageWidth / 2, footerY, { align: 'center' });
+
+    // Save PDF
+    doc.save(`Payslip-${employee.fullName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM')}.pdf`);
+    
+    toast({
+      title: 'Payslip Downloaded',
+      description: 'Your payslip PDF has been downloaded.',
+    });
   };
 
   const formatKES = (amount: number) => {
@@ -685,11 +966,14 @@ export default function Onboarding() {
             </Card>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <Button variant="outline" className="h-12 gap-2">
+              <Button variant="outline" className="h-12 gap-2" onClick={handleDownloadPayrollPdf}>
                 <Download className="h-4 w-4" />
                 Download PDF
               </Button>
-              <Button variant="outline" className="h-12 gap-2">
+              <Button variant="outline" className="h-12 gap-2" onClick={() => {
+                refreshOrganizations();
+                navigate('/employees');
+              }}>
                 <Users className="h-4 w-4" />
                 Add More Employees
               </Button>
@@ -758,11 +1042,11 @@ export default function Onboarding() {
             </Card>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <Button variant="outline" className="h-12 gap-2">
+              <Button variant="outline" className="h-12 gap-2" onClick={handleDownloadInvoicePdf}>
                 <Download className="h-4 w-4" />
                 Download PDF
               </Button>
-              <Button variant="outline" className="h-12 gap-2">
+              <Button variant="outline" className="h-12 gap-2" onClick={handleConnectPayments}>
                 <CreditCard className="h-4 w-4" />
                 Connect Payments
               </Button>
