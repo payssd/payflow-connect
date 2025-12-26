@@ -1,12 +1,39 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { LandingNavbar } from '@/components/landing/LandingNavbar';
+import { HeroSection } from '@/components/landing/HeroSection';
+import { ProblemSection } from '@/components/landing/ProblemSection';
+import { SolutionSection } from '@/components/landing/SolutionSection';
+import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
+import { FeaturesSection } from '@/components/landing/FeaturesSection';
+import { PaymentGatewaysSection } from '@/components/landing/PaymentGatewaysSection';
+import { WhyChooseUsSection } from '@/components/landing/WhyChooseUsSection';
+import { SecuritySection } from '@/components/landing/SecuritySection';
+import { PricingSection } from '@/components/landing/PricingSection';
+import { FAQSection } from '@/components/landing/FAQSection';
+import { FinalCTASection } from '@/components/landing/FinalCTASection';
+import { LandingFooter } from '@/components/landing/LandingFooter';
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <LandingNavbar />
+      <main>
+        <HeroSection />
+        <ProblemSection />
+        <SolutionSection />
+        <HowItWorksSection />
+        <section id="features">
+          <FeaturesSection />
+        </section>
+        <PaymentGatewaysSection />
+        <WhyChooseUsSection />
+        <section id="security">
+          <SecuritySection />
+        </section>
+        <PricingSection />
+        <FAQSection />
+        <FinalCTASection />
+      </main>
+      <LandingFooter />
     </div>
   );
 };

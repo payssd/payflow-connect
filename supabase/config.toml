@@ -1,0 +1,43 @@
+project_id = "rtokrinjgtlawspafznl"
+
+[functions.paystack-initialize]
+verify_jwt = false
+
+[functions.paystack-webhook]
+verify_jwt = false
+
+[functions.paystack-verify]
+verify_jwt = false
+
+[functions.send-invoice-email]
+verify_jwt = true
+
+[functions.send-notification-email]
+verify_jwt = true
+
+[functions.generate-payslip]
+verify_jwt = true
+
+[functions.get-public-invoice]
+verify_jwt = false
+
+[functions.save-gateway-config]
+verify_jwt = true
+
+[functions.initialize-invoice-payment]
+verify_jwt = false
+
+[functions.verify-invoice-payment]
+verify_jwt = false
+
+[functions.send-subscription-email]
+verify_jwt = false
+
+[functions.send-team-invitation]
+verify_jwt = true
+
+[functions.accept-invitation]
+verify_jwt = true
+
+[functions.send-trial-reminder]
+verify_jwt = false
