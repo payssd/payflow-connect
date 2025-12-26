@@ -9,8 +9,13 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Smartphone, Building2, Save, CreditCard, Shield, AlertTriangle, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { validateGatewayConfig, validateKeyEnvironment, type ValidationResult } from '@/lib/paymentValidation';
+import { 
+  Loader2, Smartphone, Building2, Save, Shield, AlertCircle, 
+  Layers, Plus, Settings2, CheckCircle 
+} from 'lucide-react';
+import { GatewaySelector } from '@/components/payments/GatewaySelector';
+import { GatewayConfigForm } from '@/components/payments/GatewayConfigForm';
+import { getGatewayById, getActiveGateways, type PaymentGateway } from '@/lib/gatewayRegistry';
 
 interface ManualPaymentSettings {
   mpesa_enabled: boolean;
@@ -24,26 +29,11 @@ interface ManualPaymentSettings {
   bank_swift_code: string;
 }
 
-interface GatewayState {
-  isEnabled: boolean;
-  isLiveMode: boolean;
-  publicKey: string;
-  secretKey: string;
-  webhookSecret: string;
-  secretKeyHint: string;
-  webhookSecretHint: string;
-}
-
-interface MpesaDarajaConfig {
-  isEnabled: boolean;
-  isLiveMode: boolean;
-  consumerKey: string;
-  consumerSecret: string;
-  passkey: string;
-  tillNumber: string;
-  consumerKeyHint: string;
-  consumerSecretHint: string;
-  passkeyHint: string;
+interface GatewayConfig {
+  id: string;
+  gateway: string;
+  is_active: boolean;
+  config: Record<string, unknown> | null;
 }
 
 export default function PaymentSettings() {
@@ -53,7 +43,11 @@ export default function PaymentSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('manual');
   
-  // Manual payment settings (stored in payment_gateway_configs with gateway='manual')
+  // View state for automated tab
+  const [automatedView, setAutomatedView] = useState<'list' | 'config'>('list');
+  const [selectedGateway, setSelectedGateway] = useState<string | null>(null);
+  
+  // Manual payment settings
   const [settings, setSettings] = useState<ManualPaymentSettings>({
     mpesa_enabled: false,
     mpesa_business_shortcode: '',
@@ -66,61 +60,13 @@ export default function PaymentSettings() {
     bank_swift_code: '',
   });
 
-  // Gateway configs
-  const [paystackConfig, setPaystackConfig] = useState<GatewayState>({
-    isEnabled: false,
-    isLiveMode: false,
-    publicKey: '',
-    secretKey: '',
-    webhookSecret: '',
-    secretKeyHint: '',
-    webhookSecretHint: '',
-  });
-
-  const [flutterwaveConfig, setFlutterwaveConfig] = useState<GatewayState>({
-    isEnabled: false,
-    isLiveMode: false,
-    publicKey: '',
-    secretKey: '',
-    webhookSecret: '',
-    secretKeyHint: '',
-    webhookSecretHint: '',
-  });
-
-  const [mpesaDarajaConfig, setMpesaDarajaConfig] = useState<MpesaDarajaConfig>({
-    isEnabled: false,
-    isLiveMode: false,
-    consumerKey: '',
-    consumerSecret: '',
-    passkey: '',
-    tillNumber: '',
-    consumerKeyHint: '',
-    consumerSecretHint: '',
-    passkeyHint: '',
-  });
-
-  const [showSecrets, setShowSecrets] = useState({
-    paystackSecret: false,
-    paystackWebhook: false,
-    flutterwaveSecret: false,
-    flutterwaveWebhook: false,
-    mpesaConsumerKey: false,
-    mpesaConsumerSecret: false,
-    mpesaPasskey: false,
-  });
-
-  // Validation errors state
-  const [validationErrors, setValidationErrors] = useState<Record<string, Record<string, string>>>({
-    paystack: {},
-    flutterwave: {},
-    mpesa_daraja: {},
-  });
-
-  // Environment warnings
-  const [envWarnings, setEnvWarnings] = useState<Record<string, string>>({
-    paystack: '',
-    flutterwave: '',
-  });
+  // All gateway configs from database
+  const [gatewayConfigs, setGatewayConfigs] = useState<GatewayConfig[]>([]);
+  
+  // Current gateway config being edited
+  const [currentConfig, setCurrentConfig] = useState<Record<string, unknown>>({});
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (currentOrganization) {
@@ -133,17 +79,25 @@ export default function PaymentSettings() {
     
     setIsLoading(true);
     
-    // Fetch all gateway configs including manual settings
     const { data: gatewayData } = await supabase
       .from('payment_gateway_configs')
       .select('*')
       .eq('organization_id', currentOrganization.id);
 
     if (gatewayData) {
-      // Manual payment settings stored as 'manual' gateway
-      const manual = gatewayData.find(g => g.gateway === 'manual');
+      // Cast the config properly
+      const configs: GatewayConfig[] = gatewayData.map(g => ({
+        id: g.id,
+        gateway: g.gateway,
+        is_active: g.is_active,
+        config: g.config as Record<string, unknown> | null,
+      }));
+      setGatewayConfigs(configs);
+      
+      // Load manual settings
+      const manual = configs.find(g => g.gateway === 'manual');
       if (manual && manual.config) {
-        const config = manual.config as Record<string, unknown>;
+        const config = manual.config;
         setSettings({
           mpesa_enabled: Boolean(config.mpesa_enabled),
           mpesa_business_shortcode: String(config.mpesa_business_shortcode || ''),
@@ -156,53 +110,45 @@ export default function PaymentSettings() {
           bank_swift_code: String(config.bank_swift_code || ''),
         });
       }
-
-      const paystack = gatewayData.find(g => g.gateway === 'paystack');
-      if (paystack && paystack.config) {
-        const config = paystack.config as Record<string, unknown>;
-        setPaystackConfig({
-          isEnabled: paystack.is_active,
-          isLiveMode: Boolean(config.is_live_mode),
-          publicKey: String(config.public_key || ''),
-          secretKey: '',
-          webhookSecret: '',
-          secretKeyHint: String(config.secret_key_hint || ''),
-          webhookSecretHint: String(config.webhook_secret_hint || ''),
-        });
-      }
-
-      const flutterwave = gatewayData.find(g => g.gateway === 'flutterwave');
-      if (flutterwave && flutterwave.config) {
-        const config = flutterwave.config as Record<string, unknown>;
-        setFlutterwaveConfig({
-          isEnabled: flutterwave.is_active,
-          isLiveMode: Boolean(config.is_live_mode),
-          publicKey: String(config.public_key || ''),
-          secretKey: '',
-          webhookSecret: '',
-          secretKeyHint: String(config.secret_key_hint || ''),
-          webhookSecretHint: String(config.webhook_secret_hint || ''),
-        });
-      }
-
-      const mpesaDaraja = gatewayData.find(g => g.gateway === 'mpesa_daraja');
-      if (mpesaDaraja && mpesaDaraja.config) {
-        const config = mpesaDaraja.config as Record<string, unknown>;
-        setMpesaDarajaConfig({
-          isEnabled: mpesaDaraja.is_active,
-          isLiveMode: Boolean(config.is_live_mode),
-          consumerKey: '',
-          consumerSecret: '',
-          passkey: '',
-          tillNumber: String(config.till_number || ''),
-          consumerKeyHint: String(config.consumer_key_hint || ''),
-          consumerSecretHint: String(config.consumer_secret_hint || ''),
-          passkeyHint: String(config.passkey_hint || ''),
-        });
-      }
     }
 
     setIsLoading(false);
+  };
+
+  const getEnabledGateways = (): string[] => {
+    return gatewayConfigs
+      .filter(g => g.is_active && g.gateway !== 'manual')
+      .map(g => g.gateway);
+  };
+
+  const handleSelectGateway = (gatewayId: string) => {
+    setSelectedGateway(gatewayId);
+    setValidationErrors({});
+    
+    // Load existing config if available
+    const existingConfig = gatewayConfigs.find(g => g.gateway === gatewayId);
+    if (existingConfig && existingConfig.config) {
+      const config = existingConfig.config as Record<string, unknown>;
+      setCurrentConfig(config);
+      setIsLiveMode(config.is_live_mode === true || config.is_live_mode === 'true');
+    } else {
+      setCurrentConfig({});
+      setIsLiveMode(false);
+    }
+    
+    setAutomatedView('config');
+  };
+
+  const handleConfigChange = (field: string, value: unknown) => {
+    setCurrentConfig(prev => ({ ...prev, [field]: value }));
+    // Clear error when field changes
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   const handleSaveManual = async () => {
@@ -222,7 +168,6 @@ export default function PaymentSettings() {
       bank_swift_code: settings.bank_swift_code || null,
     };
 
-    // Check if manual config exists
     const { data: existing } = await supabase
       .from('payment_gateway_configs')
       .select('id')
@@ -255,184 +200,67 @@ export default function PaymentSettings() {
     setIsSaving(false);
 
     if (error) {
-      toast({
-        title: 'Error saving settings',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Error saving settings', description: error.message, variant: 'destructive' });
     } else {
-      toast({
-        title: 'Settings saved',
-        description: 'Your payment settings have been updated.',
-      });
+      toast({ title: 'Settings saved', description: 'Your payment settings have been updated.' });
     }
   };
 
-  const handleSaveGateway = async (provider: 'paystack' | 'flutterwave' | 'mpesa_daraja') => {
-    if (!currentOrganization) return;
+  const handleSaveGateway = async () => {
+    if (!currentOrganization || !selectedGateway) return;
 
-    // Clear previous errors for this provider
-    setValidationErrors(prev => ({ ...prev, [provider]: {} }));
-    setEnvWarnings(prev => ({ ...prev, [provider]: '' }));
+    const gateway = getGatewayById(selectedGateway);
+    if (!gateway) return;
 
-    // Get the config to validate
-    let configToValidate: Record<string, unknown>;
-    
-    if (provider === 'mpesa_daraja') {
-      configToValidate = {
-        isEnabled: mpesaDarajaConfig.isEnabled,
-        isLiveMode: mpesaDarajaConfig.isLiveMode,
-        consumerKey: mpesaDarajaConfig.consumerKey,
-        consumerSecret: mpesaDarajaConfig.consumerSecret,
-        passkey: mpesaDarajaConfig.passkey,
-        tillNumber: mpesaDarajaConfig.tillNumber,
-      };
-    } else {
-      const config = provider === 'paystack' ? paystackConfig : flutterwaveConfig;
-      configToValidate = {
-        isEnabled: config.isEnabled,
-        isLiveMode: config.isLiveMode,
-        publicKey: config.publicKey,
-        secretKey: config.secretKey,
-      };
-
-      // Check environment match for Paystack/Flutterwave
-      const envCheck = validateKeyEnvironment(
-        provider,
-        config.publicKey,
-        config.secretKey,
-        config.isLiveMode
-      );
-      
-      if (!envCheck.isValid) {
-        setValidationErrors(prev => ({
-          ...prev,
-          [provider]: { secretKey: envCheck.warning || 'Key mismatch detected' },
-        }));
-        toast({
-          title: 'Validation Error',
-          description: envCheck.warning,
-          variant: 'destructive',
-        });
-        return;
+    // Validate required fields
+    const errors: Record<string, string> = {};
+    gateway.fields.forEach(field => {
+      if (field.required && !currentConfig[field.name]) {
+        errors[field.name] = `${field.label} is required`;
       }
-      
-      if (envCheck.warning) {
-        setEnvWarnings(prev => ({ ...prev, [provider]: envCheck.warning || '' }));
-      }
-    }
+    });
 
-    // Validate the config
-    const validation = validateGatewayConfig(provider, configToValidate);
-    
-    if (!validation.isValid) {
-      setValidationErrors(prev => ({ ...prev, [provider]: validation.errors }));
-      const firstError = Object.values(validation.errors)[0];
-      toast({
-        title: 'Validation Error',
-        description: firstError,
-        variant: 'destructive',
-      });
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      toast({ title: 'Validation Error', description: 'Please fill in all required fields', variant: 'destructive' });
       return;
     }
 
     setIsSaving(true);
-    
-    let payload: Record<string, unknown>;
-    
-    if (provider === 'mpesa_daraja') {
-      payload = {
-        organizationId: currentOrganization.id,
-        provider,
-        consumerKey: mpesaDarajaConfig.consumerKey,
-        consumerSecret: mpesaDarajaConfig.consumerSecret,
-        passkey: mpesaDarajaConfig.passkey,
-        tillNumber: mpesaDarajaConfig.tillNumber,
-        isEnabled: mpesaDarajaConfig.isEnabled,
-        isLiveMode: mpesaDarajaConfig.isLiveMode,
-      };
-    } else {
-      const config = provider === 'paystack' ? paystackConfig : flutterwaveConfig;
-      payload = {
-        organizationId: currentOrganization.id,
-        provider,
-        publicKey: config.publicKey,
-        secretKey: config.secretKey,
-        webhookSecret: config.webhookSecret,
-        isEnabled: config.isEnabled,
-        isLiveMode: config.isLiveMode,
-      };
-    }
 
     try {
       const { data, error } = await supabase.functions.invoke('save-gateway-config', {
-        body: payload,
+        body: {
+          organizationId: currentOrganization.id,
+          provider: selectedGateway,
+          ...currentConfig,
+          isEnabled: true,
+          isLiveMode,
+        },
       });
 
-      // Check for edge function error response
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message || 'Edge function returned an error');
-      }
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
 
-      // Check for error in the response body
-      if (data?.error) {
-        console.error('Gateway config error:', data.error);
-        throw new Error(data.error);
-      }
-
-      const providerName = provider === 'mpesa_daraja' ? 'M-Pesa Daraja' : provider.charAt(0).toUpperCase() + provider.slice(1);
-      toast({
-        title: 'Gateway configured',
-        description: `${providerName} settings saved successfully.`,
-      });
-
-      // Clear sensitive fields after save
-      if (provider === 'paystack') {
-        setPaystackConfig(prev => ({
-          ...prev,
-          secretKey: '',
-          webhookSecret: '',
-          secretKeyHint: data?.config?.secretKeyHint || prev.secretKeyHint,
-          webhookSecretHint: data?.config?.webhookSecretHint || prev.webhookSecretHint,
-        }));
-      } else if (provider === 'flutterwave') {
-        setFlutterwaveConfig(prev => ({
-          ...prev,
-          secretKey: '',
-          webhookSecret: '',
-          secretKeyHint: data?.config?.secretKeyHint || prev.secretKeyHint,
-          webhookSecretHint: data?.config?.webhookSecretHint || prev.webhookSecretHint,
-        }));
-      } else if (provider === 'mpesa_daraja') {
-        setMpesaDarajaConfig(prev => ({
-          ...prev,
-          consumerKey: '',
-          consumerSecret: '',
-          passkey: '',
-          consumerKeyHint: data?.config?.consumerKeyHint || prev.consumerKeyHint,
-          consumerSecretHint: data?.config?.consumerSecretHint || prev.consumerSecretHint,
-          passkeyHint: data?.config?.passkeyHint || prev.passkeyHint,
-        }));
-      }
+      toast({ title: 'Gateway configured', description: `${gateway.name} settings saved successfully.` });
+      
+      // Refresh configs
+      await fetchSettings();
+      setAutomatedView('list');
+      setSelectedGateway(null);
     } catch (err: unknown) {
-      console.error('Error saving gateway:', err);
-      let message = 'Failed to save gateway configuration';
-      
-      if (err instanceof Error) {
-        message = err.message;
-      } else if (typeof err === 'object' && err !== null && 'message' in err) {
-        message = String((err as { message: unknown }).message);
-      }
-      
-      toast({
-        title: 'Error saving gateway',
-        description: message,
-        variant: 'destructive',
-      });
+      const message = err instanceof Error ? err.message : 'Failed to save gateway configuration';
+      toast({ title: 'Error saving gateway', description: message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleBackToList = () => {
+    setAutomatedView('list');
+    setSelectedGateway(null);
+    setCurrentConfig({});
+    setValidationErrors({});
   };
 
   if (isLoading) {
@@ -443,6 +271,8 @@ export default function PaymentSettings() {
     );
   }
 
+  const enabledGateways = getEnabledGateways();
+
   return (
     <div className="space-y-6 page-transition">
       <div>
@@ -452,10 +282,40 @@ export default function PaymentSettings() {
         </p>
       </div>
 
+      {/* Enabled Gateways Summary */}
+      {enabledGateways.length > 0 && (
+        <Card className="border-success/50 bg-success/5">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">Active Payment Gateways</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {enabledGateways.map(gw => {
+                    const gateway = getGatewayById(gw);
+                    return gateway ? (
+                      <Badge key={gw} variant="outline" className="border-success/50">
+                        {gateway.name}
+                      </Badge>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-          <TabsTrigger value="manual">Manual Payments</TabsTrigger>
-          <TabsTrigger value="automated">Automated Collection</TabsTrigger>
+          <TabsTrigger value="manual">
+            <Building2 className="h-4 w-4 mr-2" />
+            Manual Payments
+          </TabsTrigger>
+          <TabsTrigger value="automated">
+            <Layers className="h-4 w-4 mr-2" />
+            Automated Collection
+          </TabsTrigger>
         </TabsList>
 
         {/* Manual Payment Methods */}
@@ -467,7 +327,7 @@ export default function PaymentSettings() {
             </Button>
           </div>
 
-          {/* M-Pesa Settings */}
+          {/* M-Pesa Manual Settings */}
           <Card className="border-0 shadow-card">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -476,8 +336,8 @@ export default function PaymentSettings() {
                     <Smartphone className="h-5 w-5 text-success" />
                   </div>
                   <div>
-                    <CardTitle>M-Pesa</CardTitle>
-                    <CardDescription>Accept mobile money payments</CardDescription>
+                    <CardTitle>M-Pesa (Manual)</CardTitle>
+                    <CardDescription>Display M-Pesa details for manual payments</CardDescription>
                   </div>
                 </div>
                 <Switch
@@ -601,7 +461,7 @@ export default function PaymentSettings() {
                 <div className="space-y-1">
                   <p className="font-medium text-sm">Security Notice</p>
                   <p className="text-xs text-muted-foreground">
-                    API keys are encrypted and stored securely. We only display the last 4 characters for your reference.
+                    API keys are encrypted and stored securely. Only connect to payment gateways you trust.
                     Never share your secret keys with anyone.
                   </p>
                 </div>
@@ -609,369 +469,24 @@ export default function PaymentSettings() {
             </CardContent>
           </Card>
 
-          {/* Paystack */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#00C3F7]/10 flex items-center justify-center">
-                    <CreditCard className="h-5 w-5 text-[#00C3F7]" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CardTitle>Paystack</CardTitle>
-                      {paystackConfig.isEnabled && (
-                        <Badge variant={paystackConfig.isLiveMode ? 'default' : 'secondary'}>
-                          {paystackConfig.isLiveMode ? 'Live' : 'Test'}
-                        </Badge>
-                      )}
-                    </div>
-                    <CardDescription>Accept cards, bank transfers, and mobile money</CardDescription>
-                  </div>
-                </div>
-                <Switch
-                  checked={paystackConfig.isEnabled}
-                  onCheckedChange={(checked) => setPaystackConfig(prev => ({ ...prev, isEnabled: checked }))}
-                />
-              </div>
-            </CardHeader>
-            {paystackConfig.isEnabled && (
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-warning" />
-                    <span className="text-sm">Live Mode</span>
-                  </div>
-                  <Switch
-                    checked={paystackConfig.isLiveMode}
-                    onCheckedChange={(checked) => setPaystackConfig(prev => ({ ...prev, isLiveMode: checked }))}
-                  />
-                </div>
-
-                {/* Environment warning */}
-                {envWarnings.paystack && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
-                    <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-warning">{envWarnings.paystack}</p>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="paystack-public">Public Key</Label>
-                    <Input
-                      id="paystack-public"
-                      placeholder="pk_test_... or pk_live_..."
-                      value={paystackConfig.publicKey}
-                      onChange={(e) => setPaystackConfig(prev => ({ ...prev, publicKey: e.target.value }))}
-                      className={validationErrors.paystack?.publicKey ? 'border-destructive' : ''}
-                    />
-                    {validationErrors.paystack?.publicKey && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.paystack.publicKey}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="paystack-secret">Secret Key</Label>
-                    <div className="relative">
-                      <Input
-                        id="paystack-secret"
-                        type={showSecrets.paystackSecret ? 'text' : 'password'}
-                        placeholder={paystackConfig.secretKeyHint || 'sk_test_... or sk_live_...'}
-                        value={paystackConfig.secretKey}
-                        onChange={(e) => setPaystackConfig(prev => ({ ...prev, secretKey: e.target.value }))}
-                        className={validationErrors.paystack?.secretKey ? 'border-destructive' : ''}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, paystackSecret: !prev.paystackSecret }))}
-                      >
-                        {showSecrets.paystackSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {validationErrors.paystack?.secretKey && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.paystack.secretKey}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <Button onClick={() => handleSaveGateway('paystack')} disabled={isSaving} className="w-full">
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save Paystack Settings
-                </Button>
-              </CardContent>
-            )}
-          </Card>
-
-          {/* Flutterwave */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#F5A623]/10 flex items-center justify-center">
-                    <CreditCard className="h-5 w-5 text-[#F5A623]" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CardTitle>Flutterwave</CardTitle>
-                      {flutterwaveConfig.isEnabled && (
-                        <Badge variant={flutterwaveConfig.isLiveMode ? 'default' : 'secondary'}>
-                          {flutterwaveConfig.isLiveMode ? 'Live' : 'Test'}
-                        </Badge>
-                      )}
-                    </div>
-                    <CardDescription>Accept cards, M-Pesa, and bank transfers across Africa</CardDescription>
-                  </div>
-                </div>
-                <Switch
-                  checked={flutterwaveConfig.isEnabled}
-                  onCheckedChange={(checked) => setFlutterwaveConfig(prev => ({ ...prev, isEnabled: checked }))}
-                />
-              </div>
-            </CardHeader>
-            {flutterwaveConfig.isEnabled && (
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-warning" />
-                    <span className="text-sm">Live Mode</span>
-                  </div>
-                  <Switch
-                    checked={flutterwaveConfig.isLiveMode}
-                    onCheckedChange={(checked) => setFlutterwaveConfig(prev => ({ ...prev, isLiveMode: checked }))}
-                  />
-                </div>
-
-                {/* Environment warning */}
-                {envWarnings.flutterwave && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
-                    <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-warning">{envWarnings.flutterwave}</p>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="flw-public">Public Key</Label>
-                    <Input
-                      id="flw-public"
-                      placeholder="FLWPUBK_TEST-... or FLWPUBK-..."
-                      value={flutterwaveConfig.publicKey}
-                      onChange={(e) => setFlutterwaveConfig(prev => ({ ...prev, publicKey: e.target.value }))}
-                      className={validationErrors.flutterwave?.publicKey ? 'border-destructive' : ''}
-                    />
-                    {validationErrors.flutterwave?.publicKey && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.flutterwave.publicKey}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="flw-secret">Secret Key</Label>
-                    <div className="relative">
-                      <Input
-                        id="flw-secret"
-                        type={showSecrets.flutterwaveSecret ? 'text' : 'password'}
-                        placeholder={flutterwaveConfig.secretKeyHint || 'FLWSECK_TEST-... or FLWSECK-...'}
-                        value={flutterwaveConfig.secretKey}
-                        onChange={(e) => setFlutterwaveConfig(prev => ({ ...prev, secretKey: e.target.value }))}
-                        className={validationErrors.flutterwave?.secretKey ? 'border-destructive' : ''}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, flutterwaveSecret: !prev.flutterwaveSecret }))}
-                      >
-                        {showSecrets.flutterwaveSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {validationErrors.flutterwave?.secretKey && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.flutterwave.secretKey}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <Button onClick={() => handleSaveGateway('flutterwave')} disabled={isSaving} className="w-full">
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save Flutterwave Settings
-                </Button>
-              </CardContent>
-            )}
-          </Card>
-
-          {/* M-Pesa Daraja (STK Push) */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                    <Smartphone className="h-5 w-5 text-success" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CardTitle>M-Pesa Daraja (STK Push)</CardTitle>
-                      {mpesaDarajaConfig.isEnabled && (
-                        <Badge variant={mpesaDarajaConfig.isLiveMode ? 'default' : 'secondary'}>
-                          {mpesaDarajaConfig.isLiveMode ? 'Live' : 'Sandbox'}
-                        </Badge>
-                      )}
-                    </div>
-                    <CardDescription>Automated M-Pesa collection via Safaricom Daraja API</CardDescription>
-                  </div>
-                </div>
-                <Switch
-                  checked={mpesaDarajaConfig.isEnabled}
-                  onCheckedChange={(checked) => setMpesaDarajaConfig(prev => ({ ...prev, isEnabled: checked }))}
-                />
-              </div>
-            </CardHeader>
-            {mpesaDarajaConfig.isEnabled && (
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-warning" />
-                    <span className="text-sm">Live Mode (Production)</span>
-                  </div>
-                  <Switch
-                    checked={mpesaDarajaConfig.isLiveMode}
-                    onCheckedChange={(checked) => setMpesaDarajaConfig(prev => ({ ...prev, isLiveMode: checked }))}
-                  />
-                </div>
-
-                <div className="p-3 rounded-lg bg-info/10 border border-info/20 text-sm">
-                  <p className="font-medium text-info mb-1">Setup Instructions</p>
-                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-xs">
-                    <li>Register on the <a href="https://developer.safaricom.co.ke" target="_blank" rel="noopener noreferrer" className="text-info underline">Safaricom Developer Portal</a></li>
-                    <li>Create an app and get your Consumer Key & Secret</li>
-                    <li>For Till Number (Buy Goods), use your Till as shortcode</li>
-                    <li>Get your Passkey from Safaricom after going live</li>
-                  </ol>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="mpesa-till">Till Number (Shortcode)</Label>
-                    <Input
-                      id="mpesa-till"
-                      placeholder="e.g., 5678901"
-                      value={mpesaDarajaConfig.tillNumber}
-                      onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, tillNumber: e.target.value }))}
-                      className={validationErrors.mpesa_daraja?.tillNumber ? 'border-destructive' : ''}
-                    />
-                    {validationErrors.mpesa_daraja?.tillNumber && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.mpesa_daraja.tillNumber}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mpesa-consumer-key">Consumer Key</Label>
-                    <div className="relative">
-                      <Input
-                        id="mpesa-consumer-key"
-                        type={showSecrets.mpesaConsumerKey ? 'text' : 'password'}
-                        placeholder={mpesaDarajaConfig.consumerKeyHint || 'Your Daraja Consumer Key'}
-                        value={mpesaDarajaConfig.consumerKey}
-                        onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, consumerKey: e.target.value }))}
-                        className={validationErrors.mpesa_daraja?.consumerKey ? 'border-destructive' : ''}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, mpesaConsumerKey: !prev.mpesaConsumerKey }))}
-                      >
-                        {showSecrets.mpesaConsumerKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {validationErrors.mpesa_daraja?.consumerKey && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.mpesa_daraja.consumerKey}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mpesa-consumer-secret">Consumer Secret</Label>
-                    <div className="relative">
-                      <Input
-                        id="mpesa-consumer-secret"
-                        type={showSecrets.mpesaConsumerSecret ? 'text' : 'password'}
-                        placeholder={mpesaDarajaConfig.consumerSecretHint || 'Your Daraja Consumer Secret'}
-                        value={mpesaDarajaConfig.consumerSecret}
-                        onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, consumerSecret: e.target.value }))}
-                        className={validationErrors.mpesa_daraja?.consumerSecret ? 'border-destructive' : ''}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, mpesaConsumerSecret: !prev.mpesaConsumerSecret }))}
-                      >
-                        {showSecrets.mpesaConsumerSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {validationErrors.mpesa_daraja?.consumerSecret && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.mpesa_daraja.consumerSecret}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mpesa-passkey">Passkey</Label>
-                    <div className="relative">
-                      <Input
-                        id="mpesa-passkey"
-                        type={showSecrets.mpesaPasskey ? 'text' : 'password'}
-                        placeholder={mpesaDarajaConfig.passkeyHint || 'Your Daraja Passkey'}
-                        value={mpesaDarajaConfig.passkey}
-                        onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, passkey: e.target.value }))}
-                        className={validationErrors.mpesa_daraja?.passkey ? 'border-destructive' : ''}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, mpesaPasskey: !prev.mpesaPasskey }))}
-                      >
-                        {showSecrets.mpesaPasskey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {validationErrors.mpesa_daraja?.passkey && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {validationErrors.mpesa_daraja.passkey}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <Button onClick={() => handleSaveGateway('mpesa_daraja')} disabled={isSaving} className="w-full">
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save M-Pesa Daraja Settings
-                </Button>
-              </CardContent>
-            )}
-          </Card>
+          {automatedView === 'list' ? (
+            <GatewaySelector 
+              enabledGateways={enabledGateways}
+              onSelectGateway={handleSelectGateway}
+            />
+          ) : selectedGateway ? (
+            <GatewayConfigForm
+              gatewayId={selectedGateway}
+              config={currentConfig}
+              isLiveMode={isLiveMode}
+              isSaving={isSaving}
+              errors={validationErrors}
+              onConfigChange={handleConfigChange}
+              onLiveModeChange={setIsLiveMode}
+              onSave={handleSaveGateway}
+              onBack={handleBackToList}
+            />
+          ) : null}
         </TabsContent>
       </Tabs>
     </div>
