@@ -151,9 +151,11 @@ export function PayrollList({ payrollRuns, isLoading, onAddNew, onView, onDelete
       </Card>
 
       <AlertDialog
-        open={!!deleteId}
+        open={deleteId !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteId(null);
+          // Some dialog implementations may call onOpenChange(false) on mount;
+          // avoid setting state unless we are actually closing an open dialog.
+          if (!open && deleteId !== null) setDeleteId(null);
         }}
       >
         <AlertDialogContent>
