@@ -34,7 +34,6 @@ interface PayrollFormProps {
 
 export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading }: PayrollFormProps) {
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
-  const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
@@ -57,13 +56,24 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
     return employees.filter(emp => emp.status === 'active' && Number(emp.base_salary) > 0);
   }, [employees]);
 
-  // Auto-select all eligible employees only once when they first load
+  // Memoize eligible employee IDs for stable dependency
+  const eligibleEmployeeIds = useMemo(() => {
+    return eligibleEmployees.map(emp => emp.id).join(',');
+  }, [eligibleEmployees]);
+
+  // Auto-select all eligible employees when dialog opens
   useEffect(() => {
-    if (eligibleEmployees.length > 0 && !hasAutoSelected) {
+    if (open && eligibleEmployees.length > 0) {
       setSelectedEmployees(new Set(eligibleEmployees.map(emp => emp.id)));
-      setHasAutoSelected(true);
     }
-  }, [eligibleEmployees, hasAutoSelected]);
+  }, [open, eligibleEmployeeIds]); // Use stable string instead of array
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setSelectedEmployees(new Set());
+    }
+  }, [open]);
 
   // Calculate preview - memoized to prevent unnecessary recalculations
   const calculatedPreview = useMemo(() => {
@@ -88,13 +98,6 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
       { totalGross: 0, totalPaye: 0, totalNhif: 0, totalNssf: 0, totalNet: 0, count: 0 }
     );
   }, [selectedEmployees, eligibleEmployees]);
-
-  // Reset state when dialog closes
-  useEffect(() => {
-    if (!open) {
-      setHasAutoSelected(false);
-    }
-  }, [open]);
 
   const toggleEmployee = (id: string) => {
     const newSet = new Set(selectedEmployees);
