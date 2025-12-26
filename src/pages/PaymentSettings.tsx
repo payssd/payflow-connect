@@ -9,7 +9,8 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Smartphone, Building2, Save, CreditCard, Shield, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Smartphone, Building2, Save, CreditCard, Shield, AlertTriangle, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { validateGatewayConfig, validateKeyEnvironment, type ValidationResult } from '@/lib/paymentValidation';
 
 interface ManualPaymentSettings {
   mpesa_enabled: boolean;
@@ -106,6 +107,19 @@ export default function PaymentSettings() {
     mpesaConsumerKey: false,
     mpesaConsumerSecret: false,
     mpesaPasskey: false,
+  });
+
+  // Validation errors state
+  const [validationErrors, setValidationErrors] = useState<Record<string, Record<string, string>>>({
+    paystack: {},
+    flutterwave: {},
+    mpesa_daraja: {},
+  });
+
+  // Environment warnings
+  const [envWarnings, setEnvWarnings] = useState<Record<string, string>>({
+    paystack: '',
+    flutterwave: '',
   });
 
   useEffect(() => {
@@ -256,6 +270,71 @@ export default function PaymentSettings() {
 
   const handleSaveGateway = async (provider: 'paystack' | 'flutterwave' | 'mpesa_daraja') => {
     if (!currentOrganization) return;
+
+    // Clear previous errors for this provider
+    setValidationErrors(prev => ({ ...prev, [provider]: {} }));
+    setEnvWarnings(prev => ({ ...prev, [provider]: '' }));
+
+    // Get the config to validate
+    let configToValidate: Record<string, unknown>;
+    
+    if (provider === 'mpesa_daraja') {
+      configToValidate = {
+        isEnabled: mpesaDarajaConfig.isEnabled,
+        isLiveMode: mpesaDarajaConfig.isLiveMode,
+        consumerKey: mpesaDarajaConfig.consumerKey,
+        consumerSecret: mpesaDarajaConfig.consumerSecret,
+        passkey: mpesaDarajaConfig.passkey,
+        tillNumber: mpesaDarajaConfig.tillNumber,
+      };
+    } else {
+      const config = provider === 'paystack' ? paystackConfig : flutterwaveConfig;
+      configToValidate = {
+        isEnabled: config.isEnabled,
+        isLiveMode: config.isLiveMode,
+        publicKey: config.publicKey,
+        secretKey: config.secretKey,
+      };
+
+      // Check environment match for Paystack/Flutterwave
+      const envCheck = validateKeyEnvironment(
+        provider,
+        config.publicKey,
+        config.secretKey,
+        config.isLiveMode
+      );
+      
+      if (!envCheck.isValid) {
+        setValidationErrors(prev => ({
+          ...prev,
+          [provider]: { secretKey: envCheck.warning || 'Key mismatch detected' },
+        }));
+        toast({
+          title: 'Validation Error',
+          description: envCheck.warning,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (envCheck.warning) {
+        setEnvWarnings(prev => ({ ...prev, [provider]: envCheck.warning || '' }));
+      }
+    }
+
+    // Validate the config
+    const validation = validateGatewayConfig(provider, configToValidate);
+    
+    if (!validation.isValid) {
+      setValidationErrors(prev => ({ ...prev, [provider]: validation.errors }));
+      const firstError = Object.values(validation.errors)[0];
+      toast({
+        title: 'Validation Error',
+        description: firstError,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsSaving(true);
     
@@ -569,15 +648,30 @@ export default function PaymentSettings() {
                   />
                 </div>
 
+                {/* Environment warning */}
+                {envWarnings.paystack && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
+                    <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-warning">{envWarnings.paystack}</p>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="paystack-public">Public Key</Label>
                     <Input
                       id="paystack-public"
-                      placeholder="pk_live_..."
+                      placeholder="pk_test_... or pk_live_..."
                       value={paystackConfig.publicKey}
                       onChange={(e) => setPaystackConfig(prev => ({ ...prev, publicKey: e.target.value }))}
+                      className={validationErrors.paystack?.publicKey ? 'border-destructive' : ''}
                     />
+                    {validationErrors.paystack?.publicKey && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.paystack.publicKey}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="paystack-secret">Secret Key</Label>
@@ -585,9 +679,10 @@ export default function PaymentSettings() {
                       <Input
                         id="paystack-secret"
                         type={showSecrets.paystackSecret ? 'text' : 'password'}
-                        placeholder={paystackConfig.secretKeyHint || 'sk_live_...'}
+                        placeholder={paystackConfig.secretKeyHint || 'sk_test_... or sk_live_...'}
                         value={paystackConfig.secretKey}
                         onChange={(e) => setPaystackConfig(prev => ({ ...prev, secretKey: e.target.value }))}
+                        className={validationErrors.paystack?.secretKey ? 'border-destructive' : ''}
                       />
                       <Button
                         type="button"
@@ -599,6 +694,12 @@ export default function PaymentSettings() {
                         {showSecrets.paystackSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    {validationErrors.paystack?.secretKey && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.paystack.secretKey}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -649,15 +750,30 @@ export default function PaymentSettings() {
                   />
                 </div>
 
+                {/* Environment warning */}
+                {envWarnings.flutterwave && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
+                    <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-warning">{envWarnings.flutterwave}</p>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="flw-public">Public Key</Label>
                     <Input
                       id="flw-public"
-                      placeholder="FLWPUBK-..."
+                      placeholder="FLWPUBK_TEST-... or FLWPUBK-..."
                       value={flutterwaveConfig.publicKey}
                       onChange={(e) => setFlutterwaveConfig(prev => ({ ...prev, publicKey: e.target.value }))}
+                      className={validationErrors.flutterwave?.publicKey ? 'border-destructive' : ''}
                     />
+                    {validationErrors.flutterwave?.publicKey && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.flutterwave.publicKey}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="flw-secret">Secret Key</Label>
@@ -665,9 +781,10 @@ export default function PaymentSettings() {
                       <Input
                         id="flw-secret"
                         type={showSecrets.flutterwaveSecret ? 'text' : 'password'}
-                        placeholder={flutterwaveConfig.secretKeyHint || 'FLWSECK-...'}
+                        placeholder={flutterwaveConfig.secretKeyHint || 'FLWSECK_TEST-... or FLWSECK-...'}
                         value={flutterwaveConfig.secretKey}
                         onChange={(e) => setFlutterwaveConfig(prev => ({ ...prev, secretKey: e.target.value }))}
+                        className={validationErrors.flutterwave?.secretKey ? 'border-destructive' : ''}
                       />
                       <Button
                         type="button"
@@ -679,6 +796,12 @@ export default function PaymentSettings() {
                         {showSecrets.flutterwaveSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    {validationErrors.flutterwave?.secretKey && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.flutterwave.secretKey}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -747,7 +870,14 @@ export default function PaymentSettings() {
                       placeholder="e.g., 5678901"
                       value={mpesaDarajaConfig.tillNumber}
                       onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, tillNumber: e.target.value }))}
+                      className={validationErrors.mpesa_daraja?.tillNumber ? 'border-destructive' : ''}
                     />
+                    {validationErrors.mpesa_daraja?.tillNumber && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.mpesa_daraja.tillNumber}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="mpesa-consumer-key">Consumer Key</Label>
@@ -758,6 +888,7 @@ export default function PaymentSettings() {
                         placeholder={mpesaDarajaConfig.consumerKeyHint || 'Your Daraja Consumer Key'}
                         value={mpesaDarajaConfig.consumerKey}
                         onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, consumerKey: e.target.value }))}
+                        className={validationErrors.mpesa_daraja?.consumerKey ? 'border-destructive' : ''}
                       />
                       <Button
                         type="button"
@@ -769,6 +900,12 @@ export default function PaymentSettings() {
                         {showSecrets.mpesaConsumerKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    {validationErrors.mpesa_daraja?.consumerKey && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.mpesa_daraja.consumerKey}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="mpesa-consumer-secret">Consumer Secret</Label>
@@ -779,6 +916,7 @@ export default function PaymentSettings() {
                         placeholder={mpesaDarajaConfig.consumerSecretHint || 'Your Daraja Consumer Secret'}
                         value={mpesaDarajaConfig.consumerSecret}
                         onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, consumerSecret: e.target.value }))}
+                        className={validationErrors.mpesa_daraja?.consumerSecret ? 'border-destructive' : ''}
                       />
                       <Button
                         type="button"
@@ -790,6 +928,12 @@ export default function PaymentSettings() {
                         {showSecrets.mpesaConsumerSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    {validationErrors.mpesa_daraja?.consumerSecret && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.mpesa_daraja.consumerSecret}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="mpesa-passkey">Passkey</Label>
@@ -800,6 +944,7 @@ export default function PaymentSettings() {
                         placeholder={mpesaDarajaConfig.passkeyHint || 'Your Daraja Passkey'}
                         value={mpesaDarajaConfig.passkey}
                         onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, passkey: e.target.value }))}
+                        className={validationErrors.mpesa_daraja?.passkey ? 'border-destructive' : ''}
                       />
                       <Button
                         type="button"
@@ -811,6 +956,12 @@ export default function PaymentSettings() {
                         {showSecrets.mpesaPasskey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    {validationErrors.mpesa_daraja?.passkey && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validationErrors.mpesa_daraja.passkey}
+                      </p>
+                    )}
                   </div>
                 </div>
 
