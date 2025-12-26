@@ -230,7 +230,17 @@ export default function PaymentSettings() {
         },
       });
 
-      if (error) throw error;
+      // Check for edge function error response
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Edge function returned an error');
+      }
+
+      // Check for error in the response body
+      if (data?.error) {
+        console.error('Gateway config error:', data.error);
+        throw new Error(data.error);
+      }
 
       toast({
         title: 'Gateway configured',
@@ -256,7 +266,15 @@ export default function PaymentSettings() {
         }));
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save gateway config';
+      console.error('Error saving gateway:', err);
+      let message = 'Failed to save gateway configuration';
+      
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        message = String((err as { message: unknown }).message);
+      }
+      
       toast({
         title: 'Error saving gateway',
         description: message,
