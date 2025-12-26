@@ -103,15 +103,50 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If no subscription exists, redirect to subscription page
+    // If no subscription exists, user needs to subscribe first
     if (!org.paystack_subscription_code) {
       console.log('No active subscription found for org:', organizationId);
-      return new Response(
-        JSON.stringify({ 
-          error: 'No active subscription found',
-          redirect: '/settings/subscription'
+      
+      // For users without a subscription, create a card authorization link
+      // This allows them to add a payment method before subscribing
+      const callbackUrl = `${req.headers.get('origin')}/subscription/callback?action=add_card`;
+      
+      const authResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${paystackSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: org.email,
+          amount: 100, // Minimal amount for card validation (1 NGN/cent)
+          callback_url: callbackUrl,
+          channels: ['card'],
+          metadata: {
+            organization_id: organizationId,
+            action: 'add_payment_method',
+          },
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      });
+
+      const authData = await authResponse.json();
+      console.log('Card authorization response:', JSON.stringify(authData));
+
+      if (!authData.status) {
+        return new Response(
+          JSON.stringify({ error: authData.message || 'Failed to initialize card setup' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          link: authData.data.authorization_url,
+          type: 'add_card',
+          message: 'Add your payment method to enable quick subscription',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
