@@ -22,16 +22,11 @@ serve(async (req: Request): Promise<Response> => {
 
   try {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      console.error("RESEND_API_KEY not configured");
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const resend = resendApiKey ? new Resend(resendApiKey) : null;
+    if (!resend) {
+      console.warn("RESEND_API_KEY not configured; will create invitation without sending email");
     }
-    
-    const resend = new Resend(resendApiKey);
-    
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -154,39 +149,49 @@ serve(async (req: Request): Promise<Response> => {
     const siteUrl = Deno.env.get("SITE_URL") || "https://hesabpay.lovable.app";
     const invitationUrl = `${siteUrl}/accept-invitation?token=${invitation.token}`;
 
-    // Send email
-    const emailResponse = await resend.emails.send({
-      from: "HesabPay <onboarding@resend.dev>",
-      to: [email],
-      subject: `You've been invited to join ${org.name} on HesabPay`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 28px;">HesabPay</h1>
-          </div>
-          <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
-            <h2 style="color: #1e3a5f; margin-top: 0;">You're Invited! 🎉</h2>
-            <p style="font-size: 16px;">${inviterName} has invited you to join <strong>${org.name}</strong> on HesabPay as a <strong>${role}</strong>.</p>
-            <p style="font-size: 14px; color: #666;">HesabPay is an all-in-one financial management platform for invoicing, payroll, and expense tracking.</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${invitationUrl}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Accept Invitation</a>
-            </div>
-            <p style="font-size: 12px; color: #888;">This invitation will expire in 7 days. If you didn't expect this email, you can safely ignore it.</p>
-          </div>
-        </body>
-        </html>
-      `,
-    });
+    let emailSent = false;
+    let emailError: string | null = null;
 
-    console.log("Email sent successfully:", emailResponse);
+    if (resend) {
+      try {
+        // Send email
+        const emailResponse = await resend.emails.send({
+          from: "HesabPay <onboarding@resend.dev>",
+          to: [email],
+          subject: `You've been invited to join ${org.name} on HesabPay`,
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 28px;">HesabPay</h1>
+              </div>
+              <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
+                <h2 style="color: #1e3a5f; margin-top: 0;">You're Invited!</h2>
+                <p style="font-size: 16px;">${inviterName} has invited you to join <strong>${org.name}</strong> on HesabPay as a <strong>${role}</strong>.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${invitationUrl}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Accept Invitation</a>
+                </div>
+                <p style="font-size: 12px; color: #888;">This invitation will expire in 7 days.</p>
+              </div>
+            </body>
+            </html>
+          `,
+        });
 
-    return new Response(JSON.stringify({ success: true, invitation }), {
+        emailSent = true;
+        console.log("Email sent successfully:", emailResponse);
+      } catch (err: any) {
+        emailError = err?.message || "Failed to send email";
+        console.error("Failed to send invitation email:", err);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, invitation, emailSent, emailError }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
