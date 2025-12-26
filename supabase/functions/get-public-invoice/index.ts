@@ -46,23 +46,20 @@ serve(async (req: Request) => {
       );
     }
 
-    // Fetch payment settings for the organization
-    const { data: paymentSettings } = await supabase
-      .from("payment_settings")
-      .select("*")
-      .eq("organization_id", invoice.organization_id)
-      .maybeSingle();
-
-    // Fetch gateway configs to check if online payment is available
+    // Fetch payment gateway configs for the organization (for manual payment methods)
     const { data: gatewayConfigs } = await supabase
       .from("payment_gateway_configs")
-      .select("provider, is_enabled")
-      .eq("organization_id", invoice.organization_id)
-      .eq("is_enabled", true);
+      .select("gateway, is_active, config")
+      .eq("organization_id", invoice.organization_id);
 
+    // Find manual payment settings
+    const manualConfig = gatewayConfigs?.find((c: any) => c.gateway === 'manual');
+    const paymentSettings = manualConfig?.config || {};
+
+    // Check for online payment gateways
     const onlinePayment = {
-      paystack: gatewayConfigs?.some((c: any) => c.provider === 'paystack') || false,
-      flutterwave: gatewayConfigs?.some((c: any) => c.provider === 'flutterwave') || false,
+      paystack: gatewayConfigs?.some((c: any) => c.gateway === 'paystack' && c.is_active) || false,
+      flutterwave: gatewayConfigs?.some((c: any) => c.gateway === 'flutterwave' && c.is_active) || false,
     };
 
     // Return invoice data (without sensitive organization data)
@@ -102,7 +99,7 @@ serve(async (req: Request) => {
         })),
         paymentMethods: {
           mpesa: paymentSettings?.mpesa_enabled ? {
-            shortcode: paymentSettings.mpesa_business_shortcode,
+            shortcode: paymentSettings.mpesa_shortcode,
             account_name: paymentSettings.mpesa_account_name,
           } : null,
           bank: paymentSettings?.bank_enabled ? {

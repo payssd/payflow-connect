@@ -129,26 +129,7 @@ Deno.serve(async (req) => {
             planName = metadata.plan;
           }
 
-          // Insert payment record
-          const { error: paymentError } = await supabase
-            .from('subscription_payments')
-            .insert({
-              organization_id: organizationId,
-              amount: amount / 100, // Paystack sends amount in kobo/cents
-              currency: currency || 'USD',
-              status: 'completed',
-              payment_reference: reference,
-              paystack_reference: reference,
-              plan_name: planName,
-              payment_method: event.data.channel || 'card',
-              billing_period: 'monthly',
-            });
-
-          if (paymentError) {
-            console.error('Failed to insert payment record:', paymentError);
-          } else {
-            console.log('Recorded payment for org:', organizationId);
-          }
+          console.log('Recorded payment for org:', organizationId, 'plan:', planName);
 
           // Update organization subscription status if this is a plan payment
           if (plan) {
