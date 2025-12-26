@@ -39,10 +39,10 @@ serve(async (req: Request): Promise<Response> => {
 
     // Get the invitation
     const { data: invitation, error: inviteError } = await supabase
-      .from("organization_invitations")
+      .from("team_invitations")
       .select("*, organizations(name)")
       .eq("token", token)
-      .eq("status", "pending")
+      .is("accepted_at", null)
       .maybeSingle();
 
     if (inviteError || !invitation) {
@@ -55,11 +55,6 @@ serve(async (req: Request): Promise<Response> => {
 
     // Check if invitation has expired
     if (new Date(invitation.expires_at) < new Date()) {
-      await supabase
-        .from("organization_invitations")
-        .update({ status: "expired" })
-        .eq("id", invitation.id);
-
       return new Response(JSON.stringify({ error: "This invitation has expired" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -85,10 +80,10 @@ serve(async (req: Request): Promise<Response> => {
       .maybeSingle();
 
     if (existingMember) {
-      // Update invitation status
+      // Update invitation accepted_at
       await supabase
-        .from("organization_invitations")
-        .update({ status: "accepted" })
+        .from("team_invitations")
+        .update({ accepted_at: new Date().toISOString() })
         .eq("id", invitation.id);
 
       return new Response(JSON.stringify({ 
@@ -118,10 +113,10 @@ serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Update invitation status
+    // Update invitation accepted_at
     await supabase
-      .from("organization_invitations")
-      .update({ status: "accepted" })
+      .from("team_invitations")
+      .update({ accepted_at: new Date().toISOString() })
       .eq("id", invitation.id);
 
     console.log("Invitation accepted successfully:", { userId: user.id, organizationId: invitation.organization_id });

@@ -108,28 +108,6 @@ Deno.serve(async (req) => {
         console.log('Successfully updated organization subscription');
       }
 
-      // Record the payment in billing history
-      const { amount, currency, reference } = verifyData.data;
-      const { error: paymentError } = await supabase
-        .from('subscription_payments')
-        .insert({
-          organization_id: organizationId,
-          amount: amount / 100, // Paystack returns amount in kobo/cents
-          currency: currency || 'USD',
-          status: 'completed',
-          payment_reference: reference,
-          payment_method: 'paystack',
-          plan_name: subscriptionPlan,
-          billing_period: 'monthly',
-          paystack_reference: reference,
-        });
-
-      if (paymentError) {
-        console.error('Failed to record payment:', paymentError);
-      } else {
-        console.log('Payment recorded in billing history');
-      }
-
       // Send activation email notification
       const { data: orgData } = await supabase
         .from('organizations')
@@ -156,7 +134,7 @@ Deno.serve(async (req) => {
               organizationName: orgData.name,
               type: 'activated',
               planName: subscriptionPlan ? subscriptionPlan.charAt(0).toUpperCase() + subscriptionPlan.slice(1) : 'Subscription',
-              amount: amount / 100,
+              amount: verifyData.data.amount / 100,
               nextBillingDate,
             }),
           });
