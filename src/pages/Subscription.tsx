@@ -14,13 +14,13 @@ const plans = [
   {
     id: 'starter',
     name: 'Starter',
-    description: 'Perfect for small businesses just getting started',
+    description: 'Perfect for smaller teams starting their payroll journey',
     price: { monthly: 10, yearly: 100 },
     currency: 'USD',
     icon: Zap,
     planCode: 'PLN_04faggvrzaef1nv',
+    employees: '20 employees',
     features: [
-      'Up to 10 employees',
       'Unlimited invoices',
       'Basic reports',
       'Email support',
@@ -36,8 +36,8 @@ const plans = [
     currency: 'USD',
     icon: Sparkles,
     planCode: 'PLN_h812vb0ofzt1n20',
+    employees: 'Up to 50 employees',
     features: [
-      'Up to 50 employees',
       'Unlimited invoices',
       'Advanced reports & analytics',
       'Priority email support',
@@ -45,6 +45,7 @@ const plans = [
       'Custom invoice branding',
       'Bulk payroll processing',
     ],
+    extraFeatures: 2,
     popular: true,
   },
   {
@@ -55,8 +56,8 @@ const plans = [
     currency: 'USD',
     icon: Crown,
     planCode: null, // Custom pricing - contact sales
+    employees: 'Unlimited employees',
     features: [
-      'Unlimited employees',
       'Unlimited invoices',
       'Full analytics suite',
       'Dedicated support',
@@ -66,6 +67,7 @@ const plans = [
       'Custom integrations',
       'Audit logs',
     ],
+    extraFeatures: 4,
     popular: false,
     isCustom: true,
   },
@@ -251,7 +253,7 @@ export default function Subscription() {
               </CardHeader>
 
               <CardContent className="text-center pb-6">
-                <div className="mb-6">
+                <div className="mb-2">
                   {'isCustom' in plan && plan.isCustom ? (
                     <span className="text-4xl font-bold">Custom</span>
                   ) : (
@@ -260,11 +262,15 @@ export default function Subscription() {
                         {formatPrice(plan.price[billingPeriod])}
                       </span>
                       <span className="text-muted-foreground">
-                        /{billingPeriod === 'monthly' ? 'month' : 'year'}
+                        /{billingPeriod === 'monthly' ? 'mo' : 'year'}
                       </span>
                     </>
                   )}
                 </div>
+                
+                <p className="text-sm font-medium text-foreground mb-6">
+                  {plan.employees}
+                </p>
 
                 <ul className="space-y-3 text-left">
                   {plan.features.map((feature) => (
@@ -273,6 +279,11 @@ export default function Subscription() {
                       {feature}
                     </li>
                   ))}
+                  {'extraFeatures' in plan && plan.extraFeatures && (
+                    <li className="text-sm text-primary font-medium">
+                      +{plan.extraFeatures} more features
+                    </li>
+                  )}
                 </ul>
               </CardContent>
 
