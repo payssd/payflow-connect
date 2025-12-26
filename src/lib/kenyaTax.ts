@@ -94,16 +94,24 @@ export function calculateNSSF(grossPay: number): number {
 }
 
 export function calculateTax(grossPay: number, otherDeductions: number = 0): TaxCalculation {
-  const paye = calculatePAYE(grossPay);
-  const nhif = calculateNHIF(grossPay);
-  const nssf = calculateNSSF(grossPay);
+  // Validate input to prevent NaN errors
+  const validGrossPay = Number(grossPay) || 0;
+  const validOtherDeductions = Number(otherDeductions) || 0;
   
-  const totalDeductions = paye + nhif + nssf + otherDeductions;
-  const netPay = grossPay - totalDeductions;
+  if (validGrossPay < 0) {
+    throw new Error('Gross pay cannot be negative');
+  }
+
+  const paye = calculatePAYE(validGrossPay);
+  const nhif = calculateNHIF(validGrossPay);
+  const nssf = calculateNSSF(validGrossPay);
+  
+  const totalDeductions = paye + nhif + nssf + validOtherDeductions;
+  const netPay = validGrossPay - totalDeductions;
 
   return {
-    grossPay,
-    taxableIncome: grossPay,
+    grossPay: validGrossPay,
+    taxableIncome: validGrossPay,
     paye,
     nhif,
     nssf,
@@ -112,11 +120,34 @@ export function calculateTax(grossPay: number, otherDeductions: number = 0): Tax
   };
 }
 
+/**
+ * Safely calculate tax with error handling
+ * Returns default values if calculation fails
+ */
+export function safeCalculateTax(grossPay: number, otherDeductions: number = 0): TaxCalculation {
+  try {
+    return calculateTax(grossPay, otherDeductions);
+  } catch (error) {
+    console.error('Tax calculation error:', error);
+    const validGrossPay = Math.max(0, Number(grossPay) || 0);
+    return {
+      grossPay: validGrossPay,
+      taxableIncome: validGrossPay,
+      paye: 0,
+      nhif: 0,
+      nssf: 0,
+      totalDeductions: 0,
+      netPay: validGrossPay,
+    };
+  }
+}
+
 export function formatKES(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
+  const validAmount = Number(amount) || 0;
+  return new Intl.NumberFormat('en-KE', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'KES',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(validAmount);
 }

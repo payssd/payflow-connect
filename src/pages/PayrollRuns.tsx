@@ -3,12 +3,15 @@ import { PayrollList } from '@/components/payroll/PayrollList';
 import { PayrollForm } from '@/components/payroll/PayrollForm';
 import { PayrollDetail } from '@/components/payroll/PayrollDetail';
 import { PayrollDisclaimer } from '@/components/payroll/PayrollDisclaimer';
+import { PageErrorBoundary } from '@/components/PageErrorBoundary';
 import { usePayrollRuns, type PayrollRun } from '@/hooks/usePayrollRuns';
 import { useEmployees } from '@/hooks/useEmployees';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
-export default function PayrollRuns() {
+function PayrollRunsContent() {
   const { payrollRuns, isLoading, createPayrollRun, updatePayrollRun, deletePayrollRun, getPayrollRunWithItems } = usePayrollRuns();
-  const { employees } = useEmployees();
+  const { employees, isLoading: employeesLoading, error: employeesError } = useEmployees();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
@@ -39,6 +42,39 @@ export default function PayrollRuns() {
     }
     return result;
   };
+
+  // Show loading state while employees are loading
+  if (employeesLoading && !employees.length) {
+    return (
+      <div className="space-y-6 page-transition">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Payroll Runs</h1>
+          <p className="text-muted-foreground">Process employee salaries with automatic Kenya tax calculations (PAYE, NHIF, NSSF, Housing Levy).</p>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if employees failed to load
+  if (employeesError) {
+    return (
+      <div className="space-y-6 page-transition">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Payroll Runs</h1>
+          <p className="text-muted-foreground">Process employee salaries with automatic Kenya tax calculations (PAYE, NHIF, NSSF, Housing Levy).</p>
+        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load employees: {employeesError}. Please refresh the page or contact support.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 page-transition">
@@ -75,5 +111,13 @@ export default function PayrollRuns() {
         onUpdateStatus={handleUpdateStatus}
       />
     </div>
+  );
+}
+
+export default function PayrollRuns() {
+  return (
+    <PageErrorBoundary pageName="Payroll Runs">
+      <PayrollRunsContent />
+    </PageErrorBoundary>
   );
 }
