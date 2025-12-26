@@ -66,29 +66,40 @@ serve(async (req: Request) => {
       );
     }
 
+    // Validate provider is allowed
+    if (!['paystack', 'flutterwave'].includes(provider)) {
+      console.error("Invalid provider:", provider);
+      return new Response(
+        JSON.stringify({ error: "Invalid provider. Must be 'paystack' or 'flutterwave'" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Use service role for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify user has permission (owner or admin)
-    const { data: roleData, error: roleError } = await supabase.rpc('get_org_role', {
-      _user_id: user.id,
-      _org_id: organizationId,
-    });
+    // Verify user is a member of the organization
+    const { data: memberData, error: memberError } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('organization_id', organizationId)
+      .eq('user_id', user.id)
+      .maybeSingle();
     
-    console.log("Role check result:", { roleData, roleError });
+    console.log("Member check result:", { memberData, memberError });
 
-    if (roleError) {
-      console.error("Error checking role:", roleError);
+    if (memberError) {
+      console.error("Error checking membership:", memberError);
       return new Response(
-        JSON.stringify({ error: "Failed to verify permissions" }),
+        JSON.stringify({ error: "Failed to verify permissions: " + memberError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (!roleData || !['owner', 'admin'].includes(roleData)) {
-      console.error("Permission denied for role:", roleData);
+    if (!memberData || !['owner', 'admin'].includes(memberData.role)) {
+      console.error("Permission denied for role:", memberData?.role);
       return new Response(
-        JSON.stringify({ error: "Permission denied" }),
+        JSON.stringify({ error: "Permission denied. Only owners and admins can modify payment settings." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -97,36 +108,67 @@ serve(async (req: Request) => {
     const secretKeyHint = secretKey ? `****${secretKey.slice(-4)}` : null;
     const webhookSecretHint = webhookSecret ? `****${webhookSecret.slice(-4)}` : null;
 
-    console.log("Upserting gateway config...");
+    // Build the config JSON object
+    const configPayload = {
+      public_key: publicKey || null,
+      secret_key_hint: secretKeyHint,
+      webhook_secret_hint: webhookSecretHint,
+      is_live_mode: isLiveMode,
+    };
 
-    // Upsert gateway config (public data only)
-    const { data: upsertData, error: upsertError } = await supabase
+    console.log("Checking for existing gateway config...");
+
+    // Check if config exists
+    const { data: existingConfig, error: existingError } = await supabase
       .from('payment_gateway_configs')
-      .upsert({
-        organization_id: organizationId,
-        provider,
-        is_enabled: isEnabled,
-        is_live_mode: isLiveMode,
-        public_key: publicKey || null,
-        secret_key_hint: secretKeyHint,
-        webhook_secret_hint: webhookSecretHint,
-      }, {
-        onConflict: 'organization_id,provider',
-      })
-      .select();
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('gateway', provider)
+      .maybeSingle();
 
-    console.log("Upsert result:", { upsertData, upsertError });
-
-    if (upsertError) {
-      console.error("Error saving gateway config:", upsertError);
+    if (existingError) {
+      console.error("Error checking existing config:", existingError);
       return new Response(
-        JSON.stringify({ error: "Failed to save configuration" }),
+        JSON.stringify({ error: "Failed to check existing configuration: " + existingError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Note: In production, secret keys should be stored in a secure vault
-    // For now, we'll log that they were received (not the actual values)
+    let result;
+    if (existingConfig) {
+      console.log("Updating existing config:", existingConfig.id);
+      result = await supabase
+        .from('payment_gateway_configs')
+        .update({
+          is_active: isEnabled,
+          config: configPayload,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingConfig.id)
+        .select();
+    } else {
+      console.log("Creating new config for:", provider);
+      result = await supabase
+        .from('payment_gateway_configs')
+        .insert({
+          organization_id: organizationId,
+          gateway: provider,
+          is_active: isEnabled,
+          config: configPayload,
+        })
+        .select();
+    }
+
+    console.log("Database operation result:", { data: result.data, error: result.error });
+
+    if (result.error) {
+      console.error("Error saving gateway config:", result.error);
+      return new Response(
+        JSON.stringify({ error: "Failed to save configuration: " + result.error.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log(`Gateway config saved for org ${organizationId}, provider: ${provider}, live mode: ${isLiveMode}`);
 
     return new Response(
@@ -145,8 +187,8 @@ serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Unexpected error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error occurred";
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
