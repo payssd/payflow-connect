@@ -82,13 +82,14 @@ serve(async (req: Request): Promise<Response> => {
 
     // Check if invitation already exists
     const { data: existingInvitation } = await supabase
-      .from("organization_invitations")
-      .select("id, status")
+      .from("team_invitations")
+      .select("id, accepted_at")
       .eq("organization_id", organizationId)
       .eq("email", email.toLowerCase())
+      .is("accepted_at", null)
       .maybeSingle();
 
-    if (existingInvitation && existingInvitation.status === "pending") {
+    if (existingInvitation) {
       return new Response(JSON.stringify({ error: "An invitation has already been sent to this email" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -120,16 +121,12 @@ serve(async (req: Request): Promise<Response> => {
 
     // Create invitation
     const { data: invitation, error: inviteError } = await supabase
-      .from("organization_invitations")
-      .upsert({
+      .from("team_invitations")
+      .insert({
         organization_id: organizationId,
         email: email.toLowerCase(),
         role,
         invited_by: user.id,
-        status: "pending",
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-      }, {
-        onConflict: "organization_id,email",
       })
       .select()
       .single();
