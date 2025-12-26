@@ -8,12 +8,17 @@ const corsHeaders = {
 
 interface GatewayConfigRequest {
   organizationId: string;
-  provider: 'paystack' | 'flutterwave';
-  publicKey: string;
-  secretKey: string;
+  provider: 'paystack' | 'flutterwave' | 'mpesa_daraja';
+  publicKey?: string;
+  secretKey?: string;
   webhookSecret?: string;
   isEnabled: boolean;
   isLiveMode: boolean;
+  // M-Pesa Daraja specific
+  consumerKey?: string;
+  consumerSecret?: string;
+  passkey?: string;
+  tillNumber?: string;
 }
 
 serve(async (req: Request) => {
@@ -87,10 +92,10 @@ serve(async (req: Request) => {
     }
 
     // Validate provider is allowed
-    if (!['paystack', 'flutterwave'].includes(provider)) {
+    if (!['paystack', 'flutterwave', 'mpesa_daraja'].includes(provider)) {
       console.error("Invalid provider:", provider);
       return new Response(
-        JSON.stringify({ error: "Invalid provider. Must be 'paystack' or 'flutterwave'" }),
+        JSON.stringify({ error: "Invalid provider. Must be 'paystack', 'flutterwave', or 'mpesa_daraja'" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -124,17 +129,61 @@ serve(async (req: Request) => {
       );
     }
 
-    // Store only hints of secret keys (last 4 chars)
-    const secretKeyHint = secretKey ? `****${secretKey.slice(-4)}` : null;
-    const webhookSecretHint = webhookSecret ? `****${webhookSecret.slice(-4)}` : null;
+    // Build the config JSON object based on provider
+    let configPayload: Record<string, unknown>;
+    let responseConfig: Record<string, unknown>;
 
-    // Build the config JSON object
-    const configPayload = {
-      public_key: publicKey || null,
-      secret_key_hint: secretKeyHint,
-      webhook_secret_hint: webhookSecretHint,
-      is_live_mode: isLiveMode,
-    };
+    if (provider === 'mpesa_daraja') {
+      const { consumerKey, consumerSecret, passkey, tillNumber } = body;
+      
+      // Store actual secrets (encrypted at rest by Supabase) plus hints
+      const consumerKeyHint = consumerKey ? `****${consumerKey.slice(-4)}` : null;
+      const consumerSecretHint = consumerSecret ? `****${consumerSecret.slice(-4)}` : null;
+      const passkeyHint = passkey ? `****${passkey.slice(-4)}` : null;
+      
+      configPayload = {
+        consumer_key: consumerKey || null,
+        consumer_secret: consumerSecret || null,
+        passkey: passkey || null,
+        till_number: tillNumber || null,
+        consumer_key_hint: consumerKeyHint,
+        consumer_secret_hint: consumerSecretHint,
+        passkey_hint: passkeyHint,
+        is_live_mode: isLiveMode ? "true" : "false",
+      };
+      
+      responseConfig = {
+        provider,
+        isEnabled,
+        isLiveMode,
+        tillNumber,
+        consumerKeyHint,
+        consumerSecretHint,
+        passkeyHint,
+      };
+    } else {
+      const { publicKey, secretKey, webhookSecret } = body;
+      
+      // Store only hints of secret keys (last 4 chars)
+      const secretKeyHint = secretKey ? `****${secretKey.slice(-4)}` : null;
+      const webhookSecretHint = webhookSecret ? `****${webhookSecret.slice(-4)}` : null;
+
+      configPayload = {
+        public_key: publicKey || null,
+        secret_key_hint: secretKeyHint,
+        webhook_secret_hint: webhookSecretHint,
+        is_live_mode: isLiveMode,
+      };
+      
+      responseConfig = {
+        provider,
+        isEnabled,
+        isLiveMode,
+        publicKey: publicKey ? `${publicKey.slice(0, 8)}...` : null,
+        secretKeyHint,
+        webhookSecretHint,
+      };
+    }
 
     console.log("Checking for existing gateway config...");
 
@@ -195,14 +244,7 @@ serve(async (req: Request) => {
       JSON.stringify({ 
         success: true, 
         message: "Gateway configuration saved successfully",
-        config: {
-          provider,
-          isEnabled,
-          isLiveMode,
-          publicKey: publicKey ? `${publicKey.slice(0, 8)}...` : null,
-          secretKeyHint,
-          webhookSecretHint,
-        }
+        config: responseConfig,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -8,6 +8,8 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileText, Building2, Download, Smartphone, Landmark, AlertCircle, CheckCircle2, Clock, CreditCard, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface InvoiceData {
   invoice: {
@@ -58,6 +60,7 @@ interface InvoiceData {
   onlinePayment: {
     paystack: boolean;
     flutterwave: boolean;
+    mpesa_daraja: boolean;
   };
 }
 
@@ -69,6 +72,8 @@ export default function PublicInvoice() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [showMpesaForm, setShowMpesaForm] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -176,6 +181,49 @@ export default function PublicInvoice() {
       window.location.href = result.paymentUrl;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to initialize payment';
+      toast({ title: 'Payment Error', description: message, variant: 'destructive' });
+    } finally {
+      setPaymentLoading(null);
+    }
+  };
+
+  const handleMpesaPayment = async () => {
+    if (!token || !phoneNumber) {
+      toast({ title: 'Phone number required', description: 'Please enter your M-Pesa phone number', variant: 'destructive' });
+      return;
+    }
+
+    setPaymentLoading('mpesa');
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stk-push`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            invoiceToken: token,
+            phoneNumber: phoneNumber,
+            callbackUrl: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-callback`,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to initiate M-Pesa payment');
+      }
+
+      toast({ 
+        title: 'STK Push Sent!', 
+        description: 'Please check your phone and enter your M-Pesa PIN to complete payment.',
+      });
+      setShowMpesaForm(false);
+      setPhoneNumber('');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to initiate M-Pesa payment';
       toast({ title: 'Payment Error', description: message, variant: 'destructive' });
     } finally {
       setPaymentLoading(null);
@@ -332,7 +380,7 @@ export default function PublicInvoice() {
         </Card>
 
         {/* Online Payment Options */}
-        {(data.onlinePayment?.paystack || data.onlinePayment?.flutterwave) && balanceDue > 0 && (
+        {(data.onlinePayment?.paystack || data.onlinePayment?.flutterwave || data.onlinePayment?.mpesa_daraja) && balanceDue > 0 && (
           <Card className="border-0 shadow-card">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -341,35 +389,84 @@ export default function PublicInvoice() {
               </CardTitle>
               <CardDescription>Pay securely with your card or mobile money</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-3">
-              {data.onlinePayment.paystack && (
-                <Button 
-                  onClick={() => handleOnlinePayment('paystack')}
-                  disabled={paymentLoading !== null}
-                  className="flex-1 min-w-[140px]"
-                >
-                  {paymentLoading === 'paystack' ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <CreditCard className="h-4 w-4 mr-2" />
-                  )}
-                  Pay with Paystack
-                </Button>
-              )}
-              {data.onlinePayment.flutterwave && (
-                <Button 
-                  onClick={() => handleOnlinePayment('flutterwave')}
-                  disabled={paymentLoading !== null}
-                  variant="secondary"
-                  className="flex-1 min-w-[140px]"
-                >
-                  {paymentLoading === 'flutterwave' ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <CreditCard className="h-4 w-4 mr-2" />
-                  )}
-                  Pay with Flutterwave
-                </Button>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-3">
+                {data.onlinePayment.paystack && (
+                  <Button 
+                    onClick={() => handleOnlinePayment('paystack')}
+                    disabled={paymentLoading !== null}
+                    className="flex-1 min-w-[140px]"
+                  >
+                    {paymentLoading === 'paystack' ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-2" />
+                    )}
+                    Pay with Paystack
+                  </Button>
+                )}
+                {data.onlinePayment.flutterwave && (
+                  <Button 
+                    onClick={() => handleOnlinePayment('flutterwave')}
+                    disabled={paymentLoading !== null}
+                    variant="secondary"
+                    className="flex-1 min-w-[140px]"
+                  >
+                    {paymentLoading === 'flutterwave' ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-2" />
+                    )}
+                    Pay with Flutterwave
+                  </Button>
+                )}
+                {data.onlinePayment.mpesa_daraja && !showMpesaForm && (
+                  <Button 
+                    onClick={() => setShowMpesaForm(true)}
+                    disabled={paymentLoading !== null}
+                    variant="outline"
+                    className="flex-1 min-w-[140px] border-success text-success hover:bg-success/10"
+                  >
+                    <Smartphone className="h-4 w-4 mr-2" />
+                    Pay with M-Pesa
+                  </Button>
+                )}
+              </div>
+              
+              {showMpesaForm && data.onlinePayment.mpesa_daraja && (
+                <div className="p-4 rounded-lg border bg-success/5 border-success/20 space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Smartphone className="h-5 w-5 text-success" />
+                    <h4 className="font-semibold">M-Pesa STK Push</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Enter your M-Pesa phone number to receive a payment prompt on your phone.</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="mpesa-phone">Phone Number</Label>
+                    <Input
+                      id="mpesa-phone"
+                      placeholder="e.g., 0712345678"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleMpesaPayment}
+                      disabled={paymentLoading !== null || !phoneNumber}
+                      className="flex-1 bg-success hover:bg-success/90"
+                    >
+                      {paymentLoading === 'mpesa' ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Smartphone className="h-4 w-4 mr-2" />
+                      )}
+                      Send Payment Request
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowMpesaForm(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

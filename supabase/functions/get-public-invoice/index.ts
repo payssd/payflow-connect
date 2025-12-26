@@ -60,6 +60,7 @@ serve(async (req: Request) => {
     const onlinePayment = {
       paystack: gatewayConfigs?.some((c: any) => c.gateway === 'paystack' && c.is_active) || false,
       flutterwave: gatewayConfigs?.some((c: any) => c.gateway === 'flutterwave' && c.is_active) || false,
+      mpesa_daraja: gatewayConfigs?.some((c: any) => c.gateway === 'mpesa_daraja' && c.is_active) || false,
     };
 
     // Return invoice data (without sensitive organization data)
