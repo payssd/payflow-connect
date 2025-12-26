@@ -39,6 +39,9 @@ verify_jwt = true
 [functions.save-gateway-config]
 verify_jwt = false
 
+[functions.validate-gateway-keys]
+verify_jwt = false
+
 [functions.mpesa-stk-push]
 verify_jwt = false
 

@@ -17,6 +17,7 @@ interface GatewayConfigFormProps {
   config: Record<string, unknown>;
   isLiveMode: boolean;
   isSaving: boolean;
+  isValidating?: boolean;
   errors: Record<string, string>;
   onConfigChange: (field: string, value: unknown) => void;
   onLiveModeChange: (isLive: boolean) => void;
@@ -45,6 +46,7 @@ export function GatewayConfigForm({
   config,
   isLiveMode,
   isSaving,
+  isValidating = false,
   errors,
   onConfigChange,
   onLiveModeChange,
@@ -215,15 +217,25 @@ export function GatewayConfigForm({
         {/* Save Button */}
         <Button 
           onClick={onSave} 
-          disabled={isSaving} 
+          disabled={isSaving || isValidating} 
           className="w-full"
         >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          {isValidating ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Validating API Keys...
+            </>
+          ) : isSaving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Saving...
+            </>
           ) : (
-            <Save className="h-4 w-4 mr-2" />
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              Validate & Save {gateway.name} Settings
+            </>
           )}
-          Save {gateway.name} Settings
         </Button>
       </CardContent>
     </Card>

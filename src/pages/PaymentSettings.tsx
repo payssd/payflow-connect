@@ -41,6 +41,7 @@ export default function PaymentSettings() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [activeTab, setActiveTab] = useState('manual');
   
   // View state for automated tab
@@ -206,6 +207,75 @@ export default function PaymentSettings() {
     }
   };
 
+  const validateGatewayKeys = async (): Promise<boolean> => {
+    if (!selectedGateway) return false;
+    
+    // Only validate for supported gateways
+    const supportedValidation = ['paystack', 'flutterwave', 'mpesa_daraja', 'pesapal'];
+    if (!supportedValidation.includes(selectedGateway)) {
+      return true; // Skip validation for unsupported gateways
+    }
+
+    setIsValidating(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-gateway-keys', {
+        body: {
+          provider: selectedGateway,
+          isLiveMode,
+          publicKey: currentConfig.publicKey,
+          secretKey: currentConfig.secretKey,
+          consumerKey: currentConfig.consumerKey,
+          consumerSecret: currentConfig.consumerSecret,
+          passkey: currentConfig.passkey,
+          tillNumber: currentConfig.tillNumber,
+        },
+      });
+
+      if (error) {
+        console.error('Validation function error:', error);
+        toast({ 
+          title: 'Validation Error', 
+          description: 'Failed to validate API keys. Please try again.', 
+          variant: 'destructive' 
+        });
+        return false;
+      }
+
+      if (!data?.isValid) {
+        const errorMessage = data?.error || 'Invalid API keys';
+        const details = data?.details || '';
+        
+        toast({ 
+          title: 'Invalid API Keys', 
+          description: `${errorMessage}${details ? `. ${details}` : ''}`, 
+          variant: 'destructive' 
+        });
+        
+        // Set validation error on the relevant field
+        if (selectedGateway === 'paystack' || selectedGateway === 'flutterwave') {
+          setValidationErrors(prev => ({ ...prev, secretKey: errorMessage }));
+        } else if (selectedGateway === 'mpesa_daraja' || selectedGateway === 'pesapal') {
+          setValidationErrors(prev => ({ ...prev, consumerKey: errorMessage }));
+        }
+        
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Validation error:', err);
+      toast({ 
+        title: 'Validation Error', 
+        description: 'Failed to validate API keys. Please check your connection and try again.', 
+        variant: 'destructive' 
+      });
+      return false;
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   const handleSaveGateway = async () => {
     if (!currentOrganization || !selectedGateway) return;
 
@@ -226,6 +296,14 @@ export default function PaymentSettings() {
       return;
     }
 
+    // Validate API keys with the payment provider before saving
+    toast({ title: 'Validating API Keys', description: 'Checking your credentials with the payment provider...' });
+    
+    const isValid = await validateGatewayKeys();
+    if (!isValid) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -242,7 +320,7 @@ export default function PaymentSettings() {
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
 
-      toast({ title: 'Gateway configured', description: `${gateway.name} settings saved successfully.` });
+      toast({ title: 'Gateway configured', description: `${gateway.name} settings saved successfully. API keys verified!` });
       
       // Refresh configs
       await fetchSettings();
@@ -480,6 +558,7 @@ export default function PaymentSettings() {
               config={currentConfig}
               isLiveMode={isLiveMode}
               isSaving={isSaving}
+              isValidating={isValidating}
               errors={validationErrors}
               onConfigChange={handleConfigChange}
               onLiveModeChange={setIsLiveMode}
