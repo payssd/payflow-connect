@@ -103,14 +103,50 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If no subscription exists, user needs to subscribe first
-    if (!org.paystack_subscription_code) {
-      console.log('No active subscription found for org:', organizationId);
-      
-      // For users without a subscription, create a card authorization link
-      // This allows them to add a payment method before subscribing
+    // If subscription code missing, try to recover it from Paystack using the customer code
+    let subscriptionCode: string | null = org.paystack_subscription_code;
+
+    if (!subscriptionCode && org.paystack_customer_id) {
+      try {
+        console.log('Subscription code missing, looking up by customer:', org.paystack_customer_id);
+        const subsResponse = await fetch(
+          `https://api.paystack.co/subscription?customer=${org.paystack_customer_id}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${paystackSecretKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        const subsData = await subsResponse.json();
+        console.log('Customer subscriptions lookup:', JSON.stringify(subsData));
+
+        if (subsData?.status && Array.isArray(subsData.data) && subsData.data.length > 0) {
+          const activeSub = subsData.data.find((s: any) => s.status === 'active') || subsData.data[0];
+          subscriptionCode = activeSub?.subscription_code || null;
+
+          if (subscriptionCode) {
+            console.log('Recovered subscription code:', subscriptionCode);
+            // Best-effort save for future requests
+            const { error: saveError } = await supabase
+              .from('organizations')
+              .update({ paystack_subscription_code: subscriptionCode })
+              .eq('id', organizationId);
+            if (saveError) console.error('Failed to persist subscription code:', saveError);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to recover subscription code:', e);
+      }
+    }
+
+    // If still no subscription, fallback to card setup (Paystack may show a small verification charge)
+    if (!subscriptionCode) {
+      console.log('No subscription code available for org:', organizationId);
+
       const callbackUrl = `${req.headers.get('origin')}/subscription/callback?action=add_card`;
-      
+
       const authResponse = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -119,7 +155,7 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           email: org.email,
-          amount: 100, // Minimal amount for card validation (1 NGN/cent)
+          amount: 100, // smallest possible charge in the account currency
           callback_url: callbackUrl,
           channels: ['card'],
           metadata: {
@@ -144,17 +180,17 @@ Deno.serve(async (req) => {
           success: true,
           link: authData.data.authorization_url,
           type: 'add_card',
-          message: 'Add your payment method to enable quick subscription',
+          message: 'Paystack may show a small verification charge during card setup.',
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Generate a new card update link using Paystack's subscription API
-    console.log('Fetching subscription details for:', org.paystack_subscription_code);
+    console.log('Fetching subscription details for:', subscriptionCode);
     
     const subscriptionResponse = await fetch(
-      `https://api.paystack.co/subscription/${org.paystack_subscription_code}`,
+      `https://api.paystack.co/subscription/${subscriptionCode}`,
       {
         headers: {
           'Authorization': `Bearer ${paystackSecretKey}`,
@@ -179,7 +215,7 @@ Deno.serve(async (req) => {
 
     // Get manage subscription link
     const manageResponse = await fetch(
-      `https://api.paystack.co/subscription/${org.paystack_subscription_code}/manage/link`,
+      `https://api.paystack.co/subscription/${subscriptionCode}/manage/link`,
       {
         headers: {
           'Authorization': `Bearer ${paystackSecretKey}`,
