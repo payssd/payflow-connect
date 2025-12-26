@@ -164,12 +164,14 @@ serve(async (req: Request) => {
     } else {
       const { publicKey, secretKey, webhookSecret } = body;
       
-      // Store only hints of secret keys (last 4 chars)
+      // Store hints of secret keys (last 4 chars) for display, plus actual secrets for API calls
       const secretKeyHint = secretKey ? `****${secretKey.slice(-4)}` : null;
       const webhookSecretHint = webhookSecret ? `****${webhookSecret.slice(-4)}` : null;
 
       configPayload = {
         public_key: publicKey || null,
+        secret_key: secretKey || null, // Store actual secret for API calls
+        webhook_secret: webhookSecret || null,
         secret_key_hint: secretKeyHint,
         webhook_secret_hint: webhookSecretHint,
         is_live_mode: isLiveMode,
