@@ -88,10 +88,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get organization with Paystack subscription code
+    // Get organization with Paystack details
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('paystack_customer_id, paystack_subscription_code, email, name')
+      .select('paystack_customer_id, paystack_subscription_code, email, name, subscription_status, subscription_plan')
       .eq('id', organizationId)
       .single();
 
@@ -103,50 +103,91 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If subscription code missing, try to recover it from Paystack using the customer code
+    // If subscription code missing, try to recover it from Paystack
     let subscriptionCode: string | null = org.paystack_subscription_code;
+    let customerCode: string | null = org.paystack_customer_id;
 
-    if (!subscriptionCode && org.paystack_customer_id) {
+    const fetchCustomerCodeByEmail = async (): Promise<string | null> => {
       try {
-        console.log('Subscription code missing, looking up by customer:', org.paystack_customer_id);
-        const subsResponse = await fetch(
-          `https://api.paystack.co/subscription?customer=${org.paystack_customer_id}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${paystackSecretKey}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        console.log('Looking up Paystack customer by email:', org.email);
+        const res = await fetch(`https://api.paystack.co/customer?email=${encodeURIComponent(org.email)}`, {
+          headers: {
+            'Authorization': `Bearer ${paystackSecretKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const json = await res.json();
+        console.log('Customer lookup response:', JSON.stringify(json));
+        if (json?.status && json.data?.customer_code) return json.data.customer_code;
+        return null;
+      } catch (e) {
+        console.error('Customer lookup failed:', e);
+        return null;
+      }
+    };
 
+    const fetchActiveSubscriptionCode = async (custCode: string): Promise<string | null> => {
+      try {
+        console.log('Looking up subscriptions by customer:', custCode);
+        const subsResponse = await fetch(`https://api.paystack.co/subscription?customer=${custCode}`, {
+          headers: {
+            'Authorization': `Bearer ${paystackSecretKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
         const subsData = await subsResponse.json();
         console.log('Customer subscriptions lookup:', JSON.stringify(subsData));
 
         if (subsData?.status && Array.isArray(subsData.data) && subsData.data.length > 0) {
           const activeSub = subsData.data.find((s: any) => s.status === 'active') || subsData.data[0];
-          subscriptionCode = activeSub?.subscription_code || null;
-
-          if (subscriptionCode) {
-            console.log('Recovered subscription code:', subscriptionCode);
-            // Best-effort save for future requests
-            const { error: saveError } = await supabase
-              .from('organizations')
-              .update({ paystack_subscription_code: subscriptionCode })
-              .eq('id', organizationId);
-            if (saveError) console.error('Failed to persist subscription code:', saveError);
-          }
+          return activeSub?.subscription_code || null;
         }
+
+        return null;
       } catch (e) {
-        console.error('Failed to recover subscription code:', e);
+        console.error('Subscription lookup failed:', e);
+        return null;
+      }
+    };
+
+    // Try existing customer code first
+    if (!subscriptionCode && customerCode) {
+      subscriptionCode = await fetchActiveSubscriptionCode(customerCode);
+    }
+
+    // If not found, try to locate the correct customer by email (in case we stored the wrong customer_code)
+    if (!subscriptionCode) {
+      const emailCustomer = await fetchCustomerCodeByEmail();
+      if (emailCustomer) {
+        customerCode = emailCustomer;
+        subscriptionCode = await fetchActiveSubscriptionCode(emailCustomer);
+
+        // Best-effort persist corrected customer/subscription codes
+        const updatePatch: any = { paystack_customer_id: emailCustomer };
+        if (subscriptionCode) updatePatch.paystack_subscription_code = subscriptionCode;
+        const { error: saveError } = await supabase
+          .from('organizations')
+          .update(updatePatch)
+          .eq('id', organizationId);
+        if (saveError) console.error('Failed to persist recovered Paystack identifiers:', saveError);
       }
     }
 
-    // If still no subscription, fallback to card setup (Paystack may show a small verification charge)
+    // If still no subscription code, DO NOT redirect to a paid checkout for active subscribers
     if (!subscriptionCode) {
       console.log('No subscription code available for org:', organizationId);
 
-      const callbackUrl = `${req.headers.get('origin')}/subscription/callback?action=add_card`;
+      if (org.subscription_status === 'active') {
+        return new Response(
+          JSON.stringify({
+            error: 'We could not find your active subscription in Paystack to generate a card-update link. Please contact support to reconnect your subscription.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
+      // For non-active users, allow card setup (Paystack may show a small verification charge)
+      const callbackUrl = `${req.headers.get('origin')}/subscription/callback?action=add_card`;
       const authResponse = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -155,7 +196,7 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           email: org.email,
-          amount: 100, // smallest possible charge in the account currency
+          amount: 100,
           callback_url: callbackUrl,
           channels: ['card'],
           metadata: {
