@@ -150,21 +150,14 @@ export function PayrollList({ payrollRuns, isLoading, onAddNew, onView, onDelete
         </CardContent>
       </Card>
 
-      <AlertDialog
-        open={deleteId !== null}
-        onOpenChange={(open) => {
-          // Some dialog implementations may call onOpenChange(false) on mount;
-          // avoid setting state unless we are actually closing an open dialog.
-          if (!open && deleteId !== null) setDeleteId(null);
-        }}
-      >
+      <AlertDialog open={deleteId !== null}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Payroll Run</AlertDialogTitle>
             <AlertDialogDescription>Are you sure? This will delete all payslips in this run.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeleteId(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
