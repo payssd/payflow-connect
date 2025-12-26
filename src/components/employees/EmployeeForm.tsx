@@ -10,6 +10,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Loader2 } from 'lucide-react';
 import type { Employee, EmployeeInsert } from '@/hooks/useEmployees';
 
+const MOBILE_MONEY_PROVIDERS = [
+  { value: 'mpesa', label: 'M-Pesa (Safaricom)' },
+  { value: 'airtel_money', label: 'Airtel Money' },
+  { value: 'tkash', label: 'T-Kash (Telkom)' },
+] as const;
+
 const employeeSchema = z.object({
   employee_number: z.string().optional(),
   first_name: z.string().min(1, 'First name is required').max(100),
@@ -25,9 +31,16 @@ const employeeSchema = z.object({
   kra_pin: z.string().max(50).optional(),
   nhif_number: z.string().max(50).optional(),
   nssf_number: z.string().max(50).optional(),
+  // Payment method
+  payment_method: z.enum(['bank', 'mobile_money']).default('bank'),
+  // Bank details
   bank_name: z.string().max(100).optional(),
   bank_account: z.string().max(50).optional(),
   bank_branch: z.string().max(100).optional(),
+  // Mobile money details
+  mobile_money_provider: z.string().max(50).optional(),
+  mobile_money_number: z.string().max(20).optional(),
+  // Salary
   base_salary: z.coerce.number().min(0).default(0),
   housing_allowance: z.coerce.number().min(0).default(0),
   transport_allowance: z.coerce.number().min(0).default(0),
@@ -71,15 +84,20 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
       kra_pin: employee?.kra_pin || '',
       nhif_number: employee?.nhif_number || '',
       nssf_number: employee?.nssf_number || '',
+      payment_method: ((employee as any)?.payment_method as any) || 'bank',
       bank_name: employee?.bank_name || '',
       bank_account: employee?.bank_account || '',
       bank_branch: employee?.bank_branch || '',
+      mobile_money_provider: (employee as any)?.mobile_money_provider || '',
+      mobile_money_number: (employee as any)?.mobile_money_number || '',
       base_salary: Number(employee?.base_salary) || 0,
       housing_allowance: Number(employee?.housing_allowance) || 0,
       transport_allowance: Number(employee?.transport_allowance) || 0,
       other_allowances: Number(employee?.other_allowances) || 0,
     },
   });
+
+  const paymentMethod = watch('payment_method');
 
   const handleFormSubmit = async (data: EmployeeFormData) => {
     const result = await onSubmit({
@@ -97,14 +115,17 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
       kra_pin: data.kra_pin || null,
       nhif_number: data.nhif_number || null,
       nssf_number: data.nssf_number || null,
-      bank_name: data.bank_name || null,
-      bank_account: data.bank_account || null,
-      bank_branch: data.bank_branch || null,
+      payment_method: data.payment_method,
+      bank_name: data.payment_method === 'bank' ? data.bank_name || null : null,
+      bank_account: data.payment_method === 'bank' ? data.bank_account || null : null,
+      bank_branch: data.payment_method === 'bank' ? data.bank_branch || null : null,
+      mobile_money_provider: data.payment_method === 'mobile_money' ? data.mobile_money_provider || null : null,
+      mobile_money_number: data.payment_method === 'mobile_money' ? data.mobile_money_number || null : null,
       base_salary: data.base_salary,
       housing_allowance: data.housing_allowance,
       transport_allowance: data.transport_allowance,
       other_allowances: data.other_allowances,
-    });
+    } as any);
     if (result) {
       reset();
       onOpenChange(false);
@@ -244,23 +265,79 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
             </div>
           </div>
 
-          {/* Bank Details */}
+          {/* Payment Details */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Bank Details</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="bank_name">Bank Name</Label>
-                <Input id="bank_name" {...register('bank_name')} placeholder="Equity Bank" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bank_account">Account Number</Label>
-                <Input id="bank_account" {...register('bank_account')} placeholder="1234567890" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bank_branch">Branch</Label>
-                <Input id="bank_branch" {...register('bank_branch')} placeholder="Nairobi" />
-              </div>
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Payment Details</h3>
+            
+            {/* Payment Method Selection */}
+            <div className="space-y-2">
+              <Label>Payment Method</Label>
+              <Select
+                value={paymentMethod}
+                onValueChange={(value) => setValue('payment_method', value as 'bank' | 'mobile_money')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select payment method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank">🏦 Bank Transfer</SelectItem>
+                  <SelectItem value="mobile_money">📱 Mobile Money</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Bank Details - shown when bank is selected */}
+            {paymentMethod === 'bank' && (
+              <div className="grid grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
+                <div className="space-y-2">
+                  <Label htmlFor="bank_name">Bank Name</Label>
+                  <Input id="bank_name" {...register('bank_name')} placeholder="Equity Bank" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bank_account">Account Number</Label>
+                  <Input id="bank_account" {...register('bank_account')} placeholder="1234567890" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bank_branch">Branch</Label>
+                  <Input id="bank_branch" {...register('bank_branch')} placeholder="Nairobi" />
+                </div>
+              </div>
+            )}
+
+            {/* Mobile Money Details - shown when mobile_money is selected */}
+            {paymentMethod === 'mobile_money' && (
+              <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/30">
+                <div className="space-y-2">
+                  <Label htmlFor="mobile_money_provider">Mobile Money Provider</Label>
+                  <Select
+                    value={watch('mobile_money_provider') || ''}
+                    onValueChange={(value) => setValue('mobile_money_provider', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MOBILE_MONEY_PROVIDERS.map((provider) => (
+                        <SelectItem key={provider.value} value={provider.value}>
+                          {provider.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mobile_money_number">Phone Number</Label>
+                  <Input 
+                    id="mobile_money_number" 
+                    {...register('mobile_money_number')} 
+                    placeholder="+254 7XX XXX XXX" 
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the registered mobile money number
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
