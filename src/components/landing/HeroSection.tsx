@@ -21,46 +21,55 @@ export function HeroSection() {
       <div className="relative z-10 container mx-auto px-4 py-24 text-center">
         {/* Trust indicator */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted border border-border mb-8 animate-fade-in">
-          <span className="w-2 h-2 rounded-full bg-success" />
-          <span className="text-sm text-muted-foreground">Trusted by growing East African businesses</span>
+          <span className="text-lg">🇰🇪</span>
+          <span className="text-sm text-muted-foreground">Built for Kenyan Businesses</span>
         </div>
 
         {/* Main headline - Clear, direct */}
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-semibold tracking-tight text-foreground mb-6 animate-fade-in max-w-4xl mx-auto leading-tight">
-          Run Payroll. Send Invoices.
+          Payroll & Invoicing for
           <br />
-          <span className="text-primary">Stay in Control.</span>
+          <span className="text-primary">Kenyan Businesses</span>
         </h1>
 
         {/* Sub-headline - Simple, honest */}
-        <p className="max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground mb-10 animate-fade-in leading-relaxed">
-          A simple way to manage payroll and collect payments for your business. 
-          Use your existing payment providers. Your money goes directly to you.
+        <p className="max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground mb-4 animate-fade-in leading-relaxed">
+          Run payroll with Kenya-specific rules and send invoices in one platform.
+          Use your own payment providers—your money goes directly to you.
+        </p>
+
+        {/* Supporting text */}
+        <p className="max-w-xl mx-auto text-base text-muted-foreground mb-10 animate-fade-in">
+          Designed for growing Kenyan SMEs to pay employees, bill customers,
+          and stay compliant—without losing control.
         </p>
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 animate-fade-in">
           <Button asChild size="lg" className="h-12 px-6 text-base font-medium rounded-lg">
             <Link to="/auth">
-              Start Free Trial
+              Get Started in Kenya
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <Button asChild variant="outline" size="lg" className="h-12 px-6 text-base font-medium rounded-lg">
-            <a href="mailto:sales@payflow.africa?subject=Demo Request">
+            <Link to="/auth?trial=true">
               <Play className="mr-2 h-4 w-4" />
-              Book a Demo
-            </a>
+              Start 14-Day Free Trial
+            </Link>
           </Button>
         </div>
 
         {/* Trust strip - Simple values */}
         <div className="flex flex-wrap items-center justify-center gap-8 text-sm text-muted-foreground animate-fade-in">
-          <span>Built for East Africa</span>
+          <span className="flex items-center gap-2">
+            <span>🇰🇪</span>
+            Kenya-Focused
+          </span>
           <span className="hidden sm:block w-1 h-1 rounded-full bg-border" />
-          <span>Secure by Design</span>
+          <span>PAYE, NSSF, NHIF Compliant</span>
           <span className="hidden sm:block w-1 h-1 rounded-full bg-border" />
-          <span>No Money Lock-In</span>
+          <span>Your Money, Your Control</span>
         </div>
 
         {/* Dashboard preview - Clean, functional */}
@@ -75,9 +84,9 @@ export function HeroSection() {
             <div className="p-6 md:p-8">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Payroll', value: '$24,500' },
+                  { label: 'Total Payroll', value: 'KES 2.4M' },
                   { label: 'Invoices Sent', value: '156' },
-                  { label: 'Payments Received', value: '$89,420' },
+                  { label: 'Payments Received', value: 'KES 8.9M' },
                   { label: 'Active Employees', value: '42' },
                 ].map((stat, i) => (
                   <div key={i} className="bg-muted/50 rounded-lg p-4 text-left">

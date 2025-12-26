@@ -7,18 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Building2, ArrowRight, CheckCircle2, Shield } from 'lucide-react';
-
-const countries = [
-  { code: 'KE', name: 'Kenya' },
-  { code: 'UG', name: 'Uganda' },
-  { code: 'TZ', name: 'Tanzania' },
-  { code: 'RW', name: 'Rwanda' },
-  { code: 'ET', name: 'Ethiopia' },
-  { code: 'NG', name: 'Nigeria' },
-  { code: 'GH', name: 'Ghana' },
-  { code: 'ZA', name: 'South Africa' },
-];
+import { Loader2, Building2, ArrowRight, CheckCircle2, Shield, Lock } from 'lucide-react';
+import { ALL_COUNTRIES, DEFAULT_COUNTRY } from '@/lib/countryConfig';
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -29,7 +19,7 @@ export default function Onboarding() {
   const [orgName, setOrgName] = useState('');
   const [orgEmail, setOrgEmail] = useState('');
   const [orgPhone, setOrgPhone] = useState('');
-  const [country, setCountry] = useState('Kenya');
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
 
   // If not logged in, redirect to auth
   if (!user && !authLoading) {
@@ -63,11 +53,15 @@ export default function Onboarding() {
     }
 
     setIsLoading(true);
+    
+    // Get the country name from the country code
+    const selectedCountry = ALL_COUNTRIES.find(c => c.code === country);
+    
     const { error } = await createOrganization({
       name: orgName,
       email: orgEmail,
       phone: orgPhone || undefined,
-      country,
+      country: selectedCountry?.name || 'Kenya',
     });
     setIsLoading(false);
 
@@ -89,7 +83,7 @@ export default function Onboarding() {
   };
 
   const features = [
-    'Accurate payroll calculations',
+    'Kenya payroll (PAYE, NSSF, NHIF)',
     'Professional invoice generation',
     'Payment gateway integration',
     'Clear reports and insights',
@@ -110,7 +104,7 @@ export default function Onboarding() {
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold">Set up your organization</h1>
             <p className="text-muted-foreground">
-              Create your workspace to start managing payroll and invoices.
+              Create your workspace to start managing payroll and invoices in Kenya.
             </p>
           </div>
 
@@ -169,13 +163,30 @@ export default function Onboarding() {
                       <SelectValue placeholder="Select country" />
                     </SelectTrigger>
                     <SelectContent>
-                      {countries.map((c) => (
-                        <SelectItem key={c.code} value={c.name}>
-                          {c.name}
+                      {ALL_COUNTRIES.map((c) => (
+                        <SelectItem 
+                          key={c.code} 
+                          value={c.code}
+                          disabled={!c.enabled}
+                          className={!c.enabled ? 'opacity-50' : ''}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{c.flag}</span>
+                            <span>{c.name}</span>
+                            {!c.enabled && (
+                              <span className="text-xs text-muted-foreground ml-2 flex items-center gap-1">
+                                <Lock className="h-3 w-3" />
+                                Coming Soon
+                              </span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Currently available in Kenya only. More countries coming soon.
+                  </p>
                 </div>
 
                 <Button type="submit" className="w-full h-11 mt-6" disabled={isLoading}>
@@ -204,11 +215,15 @@ export default function Onboarding() {
 
         <div className="relative z-10 space-y-8">
           <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-white text-sm">
+              <span>🇰🇪</span>
+              <span>Built for Kenya</span>
+            </div>
             <h2 className="text-2xl font-semibold text-white">
-              Everything you need to run your business
+              Everything you need to run your Kenyan business
             </h2>
             <p className="text-base text-white/70 leading-relaxed">
-              Powerful tools for payroll, invoicing, and payment management—designed for African businesses.
+              Powerful tools for payroll, invoicing, and payment management—designed specifically for Kenyan SMEs.
             </p>
           </div>
 

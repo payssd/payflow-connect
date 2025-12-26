@@ -14,25 +14,24 @@ const employeeSchema = z.object({
   employee_number: z.string().optional(),
   first_name: z.string().min(1, 'First name is required').max(100),
   last_name: z.string().min(1, 'Last name is required').max(100),
-  email: z.string().email('Invalid email').max(255),
+  email: z.string().email('Invalid email').max(255).optional().or(z.literal('')),
   phone: z.string().max(20).optional(),
   department: z.string().max(100).optional(),
   job_title: z.string().max(100).optional(),
-  employment_type: z.enum(['full-time', 'part-time', 'contract', 'intern']).default('full-time'),
   status: z.enum(['active', 'inactive', 'terminated']).default('active'),
   hire_date: z.string().optional(),
-  date_of_birth: z.string().optional(),
+  termination_date: z.string().optional(),
   national_id: z.string().max(50).optional(),
-  tax_pin: z.string().max(50).optional(),
+  kra_pin: z.string().max(50).optional(),
+  nhif_number: z.string().max(50).optional(),
+  nssf_number: z.string().max(50).optional(),
   bank_name: z.string().max(100).optional(),
-  bank_account_number: z.string().max(50).optional(),
+  bank_account: z.string().max(50).optional(),
   bank_branch: z.string().max(100).optional(),
   base_salary: z.coerce.number().min(0).default(0),
-  address: z.string().max(500).optional(),
-  city: z.string().max(100).optional(),
-  emergency_contact_name: z.string().max(100).optional(),
-  emergency_contact_phone: z.string().max(20).optional(),
-  notes: z.string().max(1000).optional(),
+  housing_allowance: z.coerce.number().min(0).default(0),
+  transport_allowance: z.coerce.number().min(0).default(0),
+  other_allowances: z.coerce.number().min(0).default(0),
 });
 
 type EmployeeFormData = z.infer<typeof employeeSchema>;
@@ -65,21 +64,20 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
       phone: employee?.phone || '',
       department: employee?.department || '',
       job_title: employee?.job_title || '',
-      employment_type: (employee?.employment_type as any) || 'full-time',
       status: (employee?.status as any) || 'active',
       hire_date: employee?.hire_date || '',
-      date_of_birth: employee?.date_of_birth || '',
+      termination_date: employee?.termination_date || '',
       national_id: employee?.national_id || '',
-      tax_pin: employee?.tax_pin || '',
+      kra_pin: employee?.kra_pin || '',
+      nhif_number: employee?.nhif_number || '',
+      nssf_number: employee?.nssf_number || '',
       bank_name: employee?.bank_name || '',
-      bank_account_number: employee?.bank_account_number || '',
+      bank_account: employee?.bank_account || '',
       bank_branch: employee?.bank_branch || '',
       base_salary: Number(employee?.base_salary) || 0,
-      address: employee?.address || '',
-      city: employee?.city || '',
-      emergency_contact_name: employee?.emergency_contact_name || '',
-      emergency_contact_phone: employee?.emergency_contact_phone || '',
-      notes: employee?.notes || '',
+      housing_allowance: Number(employee?.housing_allowance) || 0,
+      transport_allowance: Number(employee?.transport_allowance) || 0,
+      other_allowances: Number(employee?.other_allowances) || 0,
     },
   });
 
@@ -87,26 +85,25 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
     const result = await onSubmit({
       first_name: data.first_name,
       last_name: data.last_name,
-      email: data.email,
+      email: data.email || null,
       employee_number: data.employee_number || null,
       phone: data.phone || null,
       department: data.department || null,
       job_title: data.job_title || null,
-      employment_type: data.employment_type,
       status: data.status,
       hire_date: data.hire_date || null,
-      date_of_birth: data.date_of_birth || null,
+      termination_date: data.termination_date || null,
       national_id: data.national_id || null,
-      tax_pin: data.tax_pin || null,
+      kra_pin: data.kra_pin || null,
+      nhif_number: data.nhif_number || null,
+      nssf_number: data.nssf_number || null,
       bank_name: data.bank_name || null,
-      bank_account_number: data.bank_account_number || null,
+      bank_account: data.bank_account || null,
       bank_branch: data.bank_branch || null,
       base_salary: data.base_salary,
-      address: data.address || null,
-      city: data.city || null,
-      emergency_contact_name: data.emergency_contact_name || null,
-      emergency_contact_phone: data.emergency_contact_phone || null,
-      notes: data.notes || null,
+      housing_allowance: data.housing_allowance,
+      transport_allowance: data.transport_allowance,
+      other_allowances: data.other_allowances,
     });
     if (result) {
       reset();
@@ -143,7 +140,7 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" {...register('email')} placeholder="john@company.com" />
                 {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
               </div>
@@ -181,23 +178,6 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="employment_type">Employment Type</Label>
-                <Select
-                  value={watch('employment_type')}
-                  onValueChange={(value) => setValue('employment_type', value as any)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full-time">Full-time</SelectItem>
-                    <SelectItem value="part-time">Part-time</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                    <SelectItem value="intern">Intern</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={watch('status')}
@@ -213,11 +193,54 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="national_id">National ID</Label>
+                <Input id="national_id" {...register('national_id')} placeholder="12345678" />
+              </div>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="base_salary">Base Salary (KES)</Label>
-              <Input id="base_salary" type="number" step="0.01" {...register('base_salary')} placeholder="50000" />
+          {/* Salary & Allowances */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Salary & Allowances (KES)</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="base_salary">Base Salary</Label>
+                <Input id="base_salary" type="number" step="0.01" {...register('base_salary')} placeholder="50000" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="housing_allowance">Housing Allowance</Label>
+                <Input id="housing_allowance" type="number" step="0.01" {...register('housing_allowance')} placeholder="0" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="transport_allowance">Transport Allowance</Label>
+                <Input id="transport_allowance" type="number" step="0.01" {...register('transport_allowance')} placeholder="0" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="other_allowances">Other Allowances</Label>
+                <Input id="other_allowances" type="number" step="0.01" {...register('other_allowances')} placeholder="0" />
+              </div>
+            </div>
+          </div>
+
+          {/* Kenya Tax IDs */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Kenya Tax & Statutory IDs</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="kra_pin">KRA PIN</Label>
+                <Input id="kra_pin" {...register('kra_pin')} placeholder="A123456789B" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nhif_number">NHIF Number</Label>
+                <Input id="nhif_number" {...register('nhif_number')} placeholder="12345678" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nssf_number">NSSF Number</Label>
+                <Input id="nssf_number" {...register('nssf_number')} placeholder="12345678" />
+              </div>
             </div>
           </div>
 
@@ -230,50 +253,14 @@ export function EmployeeForm({ open, onOpenChange, employee, onSubmit, isLoading
                 <Input id="bank_name" {...register('bank_name')} placeholder="Equity Bank" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bank_account_number">Account Number</Label>
-                <Input id="bank_account_number" {...register('bank_account_number')} placeholder="1234567890" />
+                <Label htmlFor="bank_account">Account Number</Label>
+                <Input id="bank_account" {...register('bank_account')} placeholder="1234567890" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bank_branch">Branch</Label>
                 <Input id="bank_branch" {...register('bank_branch')} placeholder="Nairobi" />
               </div>
             </div>
-          </div>
-
-          {/* Tax & ID */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Tax & Identification</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="national_id">National ID</Label>
-                <Input id="national_id" {...register('national_id')} placeholder="12345678" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tax_pin">KRA PIN</Label>
-                <Input id="tax_pin" {...register('tax_pin')} placeholder="A123456789B" />
-              </div>
-            </div>
-          </div>
-
-          {/* Emergency Contact */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Emergency Contact</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="emergency_contact_name">Contact Name</Label>
-                <Input id="emergency_contact_name" {...register('emergency_contact_name')} placeholder="Jane Doe" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="emergency_contact_phone">Contact Phone</Label>
-                <Input id="emergency_contact_phone" {...register('emergency_contact_phone')} placeholder="+254 700 000 000" />
-              </div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" {...register('notes')} placeholder="Additional notes..." rows={3} />
           </div>
 
           <DialogFooter>

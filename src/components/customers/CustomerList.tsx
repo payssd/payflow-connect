@@ -94,7 +94,7 @@ export function CustomerList({ customers, isLoading, onAddNew, onEdit, onDelete 
                     <TableHead>Customer</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>City</TableHead>
-                    <TableHead>Payment Terms</TableHead>
+                    <TableHead>KRA PIN</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -104,9 +104,6 @@ export function CustomerList({ customers, isLoading, onAddNew, onEdit, onDelete 
                       <TableCell>
                         <div>
                           <p className="font-medium">{customer.name}</p>
-                          {customer.customer_number && (
-                            <p className="text-sm text-muted-foreground">{customer.customer_number}</p>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -117,7 +114,9 @@ export function CustomerList({ customers, isLoading, onAddNew, onEdit, onDelete 
                       </TableCell>
                       <TableCell>{customer.city || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{customer.payment_terms} days</Badge>
+                        {customer.tax_pin ? (
+                          <Badge variant="secondary">{customer.tax_pin}</Badge>
+                        ) : '-'}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>

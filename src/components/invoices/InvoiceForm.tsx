@@ -88,10 +88,9 @@ export function InvoiceForm({ open, onOpenChange, customers, onSubmit, isLoading
       setValue('customer_name', customer.name);
       setValue('customer_email', customer.email || '');
       setValue('customer_address', customer.address || '');
-      if (customer.payment_terms) {
-        const dueDate = new Date(Date.now() + customer.payment_terms * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        setValue('due_date', dueDate);
-      }
+      // Set default due date (30 days from now)
+      const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      setValue('due_date', dueDate);
     }
   };
 

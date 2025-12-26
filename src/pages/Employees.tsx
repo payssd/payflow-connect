@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { EmployeeList } from '@/components/employees/EmployeeList';
 import { EmployeeForm } from '@/components/employees/EmployeeForm';
+import { PayrollDisclaimer } from '@/components/payroll/PayrollDisclaimer';
 import { useEmployees, type Employee } from '@/hooks/useEmployees';
 
 export default function Employees() {
@@ -36,8 +37,11 @@ export default function Employees() {
     <div className="space-y-6 page-transition">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Employee Management</h1>
-        <p className="text-muted-foreground">Manage your team members and their information.</p>
+        <p className="text-muted-foreground">Manage your team members and their payroll information.</p>
       </div>
+
+      {/* Assisted Payroll Disclaimer */}
+      <PayrollDisclaimer variant="compact" />
 
       <EmployeeList
         employees={employees}

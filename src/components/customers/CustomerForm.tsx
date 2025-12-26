@@ -10,15 +10,13 @@ import { Loader2 } from 'lucide-react';
 import type { Customer, CustomerInsert } from '@/hooks/useCustomers';
 
 const customerSchema = z.object({
-  customer_number: z.string().max(50).optional(),
   name: z.string().min(1, 'Name is required').max(200),
   email: z.string().email('Invalid email').max(255).optional().or(z.literal('')),
   phone: z.string().max(20).optional(),
-  contact_person: z.string().max(100).optional(),
   address: z.string().max(500).optional(),
   city: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
   tax_pin: z.string().max(50).optional(),
-  payment_terms: z.coerce.number().min(0).max(365).default(30),
   notes: z.string().max(1000).optional(),
 });
 
@@ -38,15 +36,13 @@ export function CustomerForm({ open, onOpenChange, customer, onSubmit, isLoading
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
-      customer_number: customer?.customer_number || '',
       name: customer?.name || '',
       email: customer?.email || '',
       phone: customer?.phone || '',
-      contact_person: customer?.contact_person || '',
       address: customer?.address || '',
       city: customer?.city || '',
+      country: customer?.country || 'KE',
       tax_pin: customer?.tax_pin || '',
-      payment_terms: customer?.payment_terms || 30,
       notes: customer?.notes || '',
     },
   });
@@ -54,14 +50,12 @@ export function CustomerForm({ open, onOpenChange, customer, onSubmit, isLoading
   const handleFormSubmit = async (data: CustomerFormData) => {
     const result = await onSubmit({
       name: data.name,
-      customer_number: data.customer_number || null,
       email: data.email || null,
       phone: data.phone || null,
-      contact_person: data.contact_person || null,
       address: data.address || null,
       city: data.city || null,
+      country: data.country || 'KE',
       tax_pin: data.tax_pin || null,
-      payment_terms: data.payment_terms,
       notes: data.notes || null,
     });
     if (result) {
@@ -81,16 +75,10 @@ export function CustomerForm({ open, onOpenChange, customer, onSubmit, isLoading
         </DialogHeader>
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input id="name" {...register('name')} placeholder="Acme Corp" />
-              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="customer_number">Customer #</Label>
-              <Input id="customer_number" {...register('customer_number')} placeholder="CUST001" />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="name">Name *</Label>
+            <Input id="name" {...register('name')} placeholder="Acme Corp" />
+            {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -105,11 +93,6 @@ export function CustomerForm({ open, onOpenChange, customer, onSubmit, isLoading
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="contact_person">Contact Person</Label>
-            <Input id="contact_person" {...register('contact_person')} placeholder="John Doe" />
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
@@ -121,15 +104,9 @@ export function CustomerForm({ open, onOpenChange, customer, onSubmit, isLoading
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="tax_pin">KRA PIN</Label>
-              <Input id="tax_pin" {...register('tax_pin')} placeholder="A123456789B" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="payment_terms">Payment Terms (days)</Label>
-              <Input id="payment_terms" type="number" {...register('payment_terms')} placeholder="30" />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="tax_pin">KRA PIN</Label>
+            <Input id="tax_pin" {...register('tax_pin')} placeholder="A123456789B" />
           </div>
 
           <div className="space-y-2">
