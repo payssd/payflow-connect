@@ -265,14 +265,6 @@ export default function SubscriptionManagement() {
           return;
         }
 
-        if (data.needs_payment_setup) {
-          toast({
-            title: 'Payment method update',
-            description: data.error,
-          });
-          return;
-        }
-
         throw new Error(data.error);
       }
 
