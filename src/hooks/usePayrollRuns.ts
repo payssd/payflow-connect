@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { calculateTax } from '@/lib/kenyaTax';
+import { safeCalculateTax } from '@/lib/kenyaTax';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import type { Employee } from './useEmployees';
 
@@ -71,8 +71,8 @@ export function usePayrollRuns() {
       const payrollItems = employees
         .filter(emp => emp.status === 'active' && Number(emp.base_salary) > 0)
         .map(emp => {
-          const grossPay = Number(emp.base_salary);
-          const taxCalc = calculateTax(grossPay);
+          const grossPay = Number(emp.base_salary) || 0;
+          const taxCalc = safeCalculateTax(grossPay);
           
           return {
             employee_id: emp.id,

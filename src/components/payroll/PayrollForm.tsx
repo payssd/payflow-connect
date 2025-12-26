@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, Users, Calculator } from 'lucide-react';
-import { calculateTax, formatKES } from '@/lib/kenyaTax';
+import { Loader2, Users, Calculator, AlertCircle } from 'lucide-react';
+import { safeCalculateTax, formatKES } from '@/lib/kenyaTax';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { Employee } from '@/hooks/useEmployees';
 
 const payrollSchema = z.object({
@@ -76,8 +77,8 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
 
     const totals = selected.reduce(
       (acc, emp) => {
-        const gross = Number(emp.base_salary);
-        const tax = calculateTax(gross);
+        const gross = Number(emp.base_salary) || 0;
+        const tax = safeCalculateTax(gross);
         return {
           totalGross: acc.totalGross + gross,
           totalPaye: acc.totalPaye + tax.paye,
@@ -182,7 +183,8 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
             ) : (
               <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
                 {eligibleEmployees.map((emp) => {
-                  const tax = calculateTax(Number(emp.base_salary));
+                  const salary = Number(emp.base_salary) || 0;
+                  const tax = safeCalculateTax(salary);
                   return (
                     <div
                       key={emp.id}
