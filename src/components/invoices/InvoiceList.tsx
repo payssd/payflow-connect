@@ -88,9 +88,9 @@ export function InvoiceList({ invoices, isLoading, onAddNew, onView, onDelete, o
   };
 
   const formatCurrency = (amount: number | null) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-KE', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'KES',
       minimumFractionDigits: 0,
     }).format(amount || 0);
   };

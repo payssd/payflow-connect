@@ -120,9 +120,11 @@ export default function PublicInvoice() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    const currency = data?.invoice?.currency || 'KES';
+    const locale = currency === 'KES' ? 'en-KE' : 'en-US';
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency: data?.invoice?.currency || 'USD',
+      currency,
     }).format(amount || 0);
   };
 

@@ -78,7 +78,7 @@ export function InvoiceForm({ open, onOpenChange, customers, onSubmit, isLoading
   const total = subtotal + taxAmount - discountAmount;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
+    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount);
   };
 
   const handleCustomerSelect = (customerId: string) => {
