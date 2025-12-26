@@ -63,10 +63,14 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
 
   // Auto-select all eligible employees when dialog opens
   useEffect(() => {
-    if (open && eligibleEmployees.length > 0) {
-      setSelectedEmployees(new Set(eligibleEmployees.map(emp => emp.id)));
-    }
-  }, [open, eligibleEmployeeIds]); // Use stable string instead of array
+    if (!open) return;
+    if (eligibleEmployees.length === 0) return;
+
+    // Prevent unnecessary state churn (can cause render loops in some environments)
+    if (selectedEmployees.size > 0) return;
+
+    setSelectedEmployees(new Set(eligibleEmployees.map(emp => emp.id)));
+  }, [open, eligibleEmployeeIds, selectedEmployees.size]); // Use stable string instead of array
 
   // Reset state when dialog closes
   useEffect(() => {
