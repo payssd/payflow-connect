@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { status, metadata, plan } = verifyData.data;
+    const { status, metadata, plan, authorization, customer } = verifyData.data;
     const organizationId = metadata?.organization_id;
 
     if (status !== 'success') {
@@ -92,14 +92,56 @@ Deno.serve(async (req) => {
 
       console.log('Updating organization:', organizationId, 'with plan:', subscriptionPlan);
 
+      // Try to get the subscription code from Paystack customer subscriptions
+      let subscriptionCode = null;
+      if (customer?.customer_code) {
+        try {
+          const subsResponse = await fetch(
+            `https://api.paystack.co/subscription?customer=${customer.customer_code}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${paystackSecretKey}`,
+              },
+            }
+          );
+          const subsData = await subsResponse.json();
+          console.log('Customer subscriptions:', JSON.stringify(subsData));
+          
+          if (subsData.status && subsData.data?.length > 0) {
+            // Get the most recent active subscription
+            const activeSub = subsData.data.find((s: any) => s.status === 'active') || subsData.data[0];
+            subscriptionCode = activeSub?.subscription_code;
+            console.log('Found subscription code:', subscriptionCode);
+          }
+        } catch (e) {
+          console.error('Error fetching subscriptions:', e);
+        }
+      }
+
+      // If we have an authorization, we might need to create a subscription
+      const authorizationCode = authorization?.authorization_code;
+      console.log('Authorization code:', authorizationCode);
+
+      const updateData: any = {
+        subscription_status: 'active',
+        subscription_plan: subscriptionPlan,
+        subscription_started_at: new Date().toISOString(),
+        subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      };
+
+      // Save subscription code if found
+      if (subscriptionCode) {
+        updateData.paystack_subscription_code = subscriptionCode;
+      }
+
+      // Save customer ID if available
+      if (customer?.customer_code) {
+        updateData.paystack_customer_id = customer.customer_code;
+      }
+
       const { error: updateError } = await supabase
         .from('organizations')
-        .update({
-          subscription_status: 'active',
-          subscription_plan: subscriptionPlan,
-          subscription_started_at: new Date().toISOString(),
-          subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        })
+        .update(updateData)
         .eq('id', organizationId);
 
       if (updateError) {
