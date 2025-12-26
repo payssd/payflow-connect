@@ -33,6 +33,18 @@ interface GatewayState {
   webhookSecretHint: string;
 }
 
+interface MpesaDarajaConfig {
+  isEnabled: boolean;
+  isLiveMode: boolean;
+  consumerKey: string;
+  consumerSecret: string;
+  passkey: string;
+  tillNumber: string;
+  consumerKeyHint: string;
+  consumerSecretHint: string;
+  passkeyHint: string;
+}
+
 export default function PaymentSettings() {
   const { currentOrganization } = useAuth();
   const { toast } = useToast();
@@ -74,11 +86,26 @@ export default function PaymentSettings() {
     webhookSecretHint: '',
   });
 
+  const [mpesaDarajaConfig, setMpesaDarajaConfig] = useState<MpesaDarajaConfig>({
+    isEnabled: false,
+    isLiveMode: false,
+    consumerKey: '',
+    consumerSecret: '',
+    passkey: '',
+    tillNumber: '',
+    consumerKeyHint: '',
+    consumerSecretHint: '',
+    passkeyHint: '',
+  });
+
   const [showSecrets, setShowSecrets] = useState({
     paystackSecret: false,
     paystackWebhook: false,
     flutterwaveSecret: false,
     flutterwaveWebhook: false,
+    mpesaConsumerKey: false,
+    mpesaConsumerSecret: false,
+    mpesaPasskey: false,
   });
 
   useEffect(() => {
@@ -141,6 +168,22 @@ export default function PaymentSettings() {
           webhookSecret: '',
           secretKeyHint: String(config.secret_key_hint || ''),
           webhookSecretHint: String(config.webhook_secret_hint || ''),
+        });
+      }
+
+      const mpesaDaraja = gatewayData.find(g => g.gateway === 'mpesa_daraja');
+      if (mpesaDaraja && mpesaDaraja.config) {
+        const config = mpesaDaraja.config as Record<string, unknown>;
+        setMpesaDarajaConfig({
+          isEnabled: mpesaDaraja.is_active,
+          isLiveMode: Boolean(config.is_live_mode),
+          consumerKey: '',
+          consumerSecret: '',
+          passkey: '',
+          tillNumber: String(config.till_number || ''),
+          consumerKeyHint: String(config.consumer_key_hint || ''),
+          consumerSecretHint: String(config.consumer_secret_hint || ''),
+          passkeyHint: String(config.passkey_hint || ''),
         });
       }
     }
@@ -211,23 +254,40 @@ export default function PaymentSettings() {
     }
   };
 
-  const handleSaveGateway = async (provider: 'paystack' | 'flutterwave') => {
+  const handleSaveGateway = async (provider: 'paystack' | 'flutterwave' | 'mpesa_daraja') => {
     if (!currentOrganization) return;
 
     setIsSaving(true);
-    const config = provider === 'paystack' ? paystackConfig : flutterwaveConfig;
+    
+    let payload: Record<string, unknown>;
+    
+    if (provider === 'mpesa_daraja') {
+      payload = {
+        organizationId: currentOrganization.id,
+        provider,
+        consumerKey: mpesaDarajaConfig.consumerKey,
+        consumerSecret: mpesaDarajaConfig.consumerSecret,
+        passkey: mpesaDarajaConfig.passkey,
+        tillNumber: mpesaDarajaConfig.tillNumber,
+        isEnabled: mpesaDarajaConfig.isEnabled,
+        isLiveMode: mpesaDarajaConfig.isLiveMode,
+      };
+    } else {
+      const config = provider === 'paystack' ? paystackConfig : flutterwaveConfig;
+      payload = {
+        organizationId: currentOrganization.id,
+        provider,
+        publicKey: config.publicKey,
+        secretKey: config.secretKey,
+        webhookSecret: config.webhookSecret,
+        isEnabled: config.isEnabled,
+        isLiveMode: config.isLiveMode,
+      };
+    }
 
     try {
       const { data, error } = await supabase.functions.invoke('save-gateway-config', {
-        body: {
-          organizationId: currentOrganization.id,
-          provider,
-          publicKey: config.publicKey,
-          secretKey: config.secretKey,
-          webhookSecret: config.webhookSecret,
-          isEnabled: config.isEnabled,
-          isLiveMode: config.isLiveMode,
-        },
+        body: payload,
       });
 
       // Check for edge function error response
@@ -242,9 +302,10 @@ export default function PaymentSettings() {
         throw new Error(data.error);
       }
 
+      const providerName = provider === 'mpesa_daraja' ? 'M-Pesa Daraja' : provider.charAt(0).toUpperCase() + provider.slice(1);
       toast({
         title: 'Gateway configured',
-        description: `${provider.charAt(0).toUpperCase() + provider.slice(1)} settings saved successfully.`,
+        description: `${providerName} settings saved successfully.`,
       });
 
       // Clear sensitive fields after save
@@ -256,13 +317,23 @@ export default function PaymentSettings() {
           secretKeyHint: data?.config?.secretKeyHint || prev.secretKeyHint,
           webhookSecretHint: data?.config?.webhookSecretHint || prev.webhookSecretHint,
         }));
-      } else {
+      } else if (provider === 'flutterwave') {
         setFlutterwaveConfig(prev => ({
           ...prev,
           secretKey: '',
           webhookSecret: '',
           secretKeyHint: data?.config?.secretKeyHint || prev.secretKeyHint,
           webhookSecretHint: data?.config?.webhookSecretHint || prev.webhookSecretHint,
+        }));
+      } else if (provider === 'mpesa_daraja') {
+        setMpesaDarajaConfig(prev => ({
+          ...prev,
+          consumerKey: '',
+          consumerSecret: '',
+          passkey: '',
+          consumerKeyHint: data?.config?.consumerKeyHint || prev.consumerKeyHint,
+          consumerSecretHint: data?.config?.consumerSecretHint || prev.consumerSecretHint,
+          passkeyHint: data?.config?.passkeyHint || prev.passkeyHint,
         }));
       }
     } catch (err: unknown) {
@@ -614,6 +685,138 @@ export default function PaymentSettings() {
                 <Button onClick={() => handleSaveGateway('flutterwave')} disabled={isSaving} className="w-full">
                   {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                   Save Flutterwave Settings
+                </Button>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* M-Pesa Daraja (STK Push) */}
+          <Card className="border-0 shadow-card">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                    <Smartphone className="h-5 w-5 text-success" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>M-Pesa Daraja (STK Push)</CardTitle>
+                      {mpesaDarajaConfig.isEnabled && (
+                        <Badge variant={mpesaDarajaConfig.isLiveMode ? 'default' : 'secondary'}>
+                          {mpesaDarajaConfig.isLiveMode ? 'Live' : 'Sandbox'}
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription>Automated M-Pesa collection via Safaricom Daraja API</CardDescription>
+                  </div>
+                </div>
+                <Switch
+                  checked={mpesaDarajaConfig.isEnabled}
+                  onCheckedChange={(checked) => setMpesaDarajaConfig(prev => ({ ...prev, isEnabled: checked }))}
+                />
+              </div>
+            </CardHeader>
+            {mpesaDarajaConfig.isEnabled && (
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-warning" />
+                    <span className="text-sm">Live Mode (Production)</span>
+                  </div>
+                  <Switch
+                    checked={mpesaDarajaConfig.isLiveMode}
+                    onCheckedChange={(checked) => setMpesaDarajaConfig(prev => ({ ...prev, isLiveMode: checked }))}
+                  />
+                </div>
+
+                <div className="p-3 rounded-lg bg-info/10 border border-info/20 text-sm">
+                  <p className="font-medium text-info mb-1">Setup Instructions</p>
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-xs">
+                    <li>Register on the <a href="https://developer.safaricom.co.ke" target="_blank" rel="noopener noreferrer" className="text-info underline">Safaricom Developer Portal</a></li>
+                    <li>Create an app and get your Consumer Key & Secret</li>
+                    <li>For Till Number (Buy Goods), use your Till as shortcode</li>
+                    <li>Get your Passkey from Safaricom after going live</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="mpesa-till">Till Number (Shortcode)</Label>
+                    <Input
+                      id="mpesa-till"
+                      placeholder="e.g., 5678901"
+                      value={mpesaDarajaConfig.tillNumber}
+                      onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, tillNumber: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mpesa-consumer-key">Consumer Key</Label>
+                    <div className="relative">
+                      <Input
+                        id="mpesa-consumer-key"
+                        type={showSecrets.mpesaConsumerKey ? 'text' : 'password'}
+                        placeholder={mpesaDarajaConfig.consumerKeyHint || 'Your Daraja Consumer Key'}
+                        value={mpesaDarajaConfig.consumerKey}
+                        onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, consumerKey: e.target.value }))}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                        onClick={() => setShowSecrets(prev => ({ ...prev, mpesaConsumerKey: !prev.mpesaConsumerKey }))}
+                      >
+                        {showSecrets.mpesaConsumerKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mpesa-consumer-secret">Consumer Secret</Label>
+                    <div className="relative">
+                      <Input
+                        id="mpesa-consumer-secret"
+                        type={showSecrets.mpesaConsumerSecret ? 'text' : 'password'}
+                        placeholder={mpesaDarajaConfig.consumerSecretHint || 'Your Daraja Consumer Secret'}
+                        value={mpesaDarajaConfig.consumerSecret}
+                        onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, consumerSecret: e.target.value }))}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                        onClick={() => setShowSecrets(prev => ({ ...prev, mpesaConsumerSecret: !prev.mpesaConsumerSecret }))}
+                      >
+                        {showSecrets.mpesaConsumerSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mpesa-passkey">Passkey</Label>
+                    <div className="relative">
+                      <Input
+                        id="mpesa-passkey"
+                        type={showSecrets.mpesaPasskey ? 'text' : 'password'}
+                        placeholder={mpesaDarajaConfig.passkeyHint || 'Your Daraja Passkey'}
+                        value={mpesaDarajaConfig.passkey}
+                        onChange={(e) => setMpesaDarajaConfig(prev => ({ ...prev, passkey: e.target.value }))}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                        onClick={() => setShowSecrets(prev => ({ ...prev, mpesaPasskey: !prev.mpesaPasskey }))}
+                      >
+                        {showSecrets.mpesaPasskey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <Button onClick={() => handleSaveGateway('mpesa_daraja')} disabled={isSaving} className="w-full">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                  Save M-Pesa Daraja Settings
                 </Button>
               </CardContent>
             )}
