@@ -38,15 +38,35 @@ serve(async (req: Request) => {
     }
 
     // Create client with user token for auth check
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!anonKey) {
+      console.error("Missing SUPABASE_ANON_KEY");
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const supabaseUser = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    if (authError || !user) {
-      console.error("Auth error:", authError);
+    console.log("Getting user from auth header...");
+    const { data: userData, error: authError } = await supabaseUser.auth.getUser();
+    
+    if (authError) {
+      console.error("Auth error details:", JSON.stringify(authError));
       return new Response(
-        JSON.stringify({ error: "Invalid authentication" }),
+        JSON.stringify({ error: "Authentication failed: " + authError.message }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const user = userData?.user;
+    if (!user) {
+      console.error("No user found in session");
+      return new Response(
+        JSON.stringify({ error: "No authenticated user found" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
