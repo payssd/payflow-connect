@@ -35,6 +35,14 @@ class PageErrorBoundaryClass extends Component<Props & { navigate: (path: string
     this.setState({ errorInfo });
   }
 
+  private getFriendlyMessage = (raw: string | undefined): string => {
+    const msg = raw || 'An unexpected error occurred';
+    if (msg.includes('Minified React error #185')) {
+      return 'React render loop detected (error #185). A component is likely updating state while rendering.';
+    }
+    return msg;
+  };
+
   private handleRetry = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
   };
@@ -52,7 +60,7 @@ class PageErrorBoundaryClass extends Component<Props & { navigate: (path: string
     const details = [];
     
     details.push(`Page: ${this.props.pageName || 'Unknown'}`);
-    details.push(`Error: ${error?.message || 'Unknown error'}`);
+    details.push(`Error: ${this.getFriendlyMessage(error?.message)}`);
     details.push(`Timestamp: ${new Date().toISOString()}`);
     details.push(`URL: ${window.location.href}`);
     
@@ -100,7 +108,7 @@ class PageErrorBoundaryClass extends Component<Props & { navigate: (path: string
                 <div className="flex items-start gap-2">
                   <Bug className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-destructive break-words">
-                    {error?.message || 'An unexpected error occurred'}
+                    {this.getFriendlyMessage(error?.message)}
                   </p>
                 </div>
               </div>
