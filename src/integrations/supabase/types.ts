@@ -84,11 +84,14 @@ export type Database = {
           job_title: string | null
           kra_pin: string | null
           last_name: string
+          mobile_money_number: string | null
+          mobile_money_provider: string | null
           national_id: string | null
           nhif_number: string | null
           nssf_number: string | null
           organization_id: string
           other_allowances: number | null
+          payment_method: string | null
           phone: string | null
           status: string
           termination_date: string | null
@@ -111,11 +114,14 @@ export type Database = {
           job_title?: string | null
           kra_pin?: string | null
           last_name: string
+          mobile_money_number?: string | null
+          mobile_money_provider?: string | null
           national_id?: string | null
           nhif_number?: string | null
           nssf_number?: string | null
           organization_id: string
           other_allowances?: number | null
+          payment_method?: string | null
           phone?: string | null
           status?: string
           termination_date?: string | null
@@ -138,11 +144,14 @@ export type Database = {
           job_title?: string | null
           kra_pin?: string | null
           last_name?: string
+          mobile_money_number?: string | null
+          mobile_money_provider?: string | null
           national_id?: string | null
           nhif_number?: string | null
           nssf_number?: string | null
           organization_id?: string
           other_allowances?: number | null
+          payment_method?: string | null
           phone?: string | null
           status?: string
           termination_date?: string | null
