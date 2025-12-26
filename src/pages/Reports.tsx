@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReports } from '@/hooks/useReports';
+import { PayrollDisclaimer } from '@/components/payroll/PayrollDisclaimer';
 import { DollarSign, FileText, Users, TrendingUp, CreditCard, Clock, CheckCircle, BarChart3 } from 'lucide-react';
 import {
   BarChart,
@@ -96,8 +97,11 @@ export default function Reports() {
     <div className="space-y-6 page-transition">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-        <p className="text-muted-foreground">Business insights and analytics.</p>
+        <p className="text-muted-foreground">Business insights and analytics for your Kenyan business.</p>
       </div>
+
+      {/* Payroll Disclaimer */}
+      <PayrollDisclaimer variant="compact" />
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

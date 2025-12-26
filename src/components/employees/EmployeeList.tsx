@@ -140,7 +140,6 @@ export function EmployeeList({ employees, isLoading, onAddNew, onEdit, onDelete 
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
-                            <AvatarImage src={employee.avatar_url || undefined} />
                             <AvatarFallback className="bg-primary/10 text-primary text-sm">
                               {getInitials(employee.first_name, employee.last_name)}
                             </AvatarFallback>

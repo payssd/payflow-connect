@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PayrollList } from '@/components/payroll/PayrollList';
 import { PayrollForm } from '@/components/payroll/PayrollForm';
 import { PayrollDetail } from '@/components/payroll/PayrollDetail';
+import { PayrollDisclaimer } from '@/components/payroll/PayrollDisclaimer';
 import { usePayrollRuns, type PayrollRun } from '@/hooks/usePayrollRuns';
 import { useEmployees } from '@/hooks/useEmployees';
 
@@ -43,8 +44,11 @@ export default function PayrollRuns() {
     <div className="space-y-6 page-transition">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Payroll Runs</h1>
-        <p className="text-muted-foreground">Process employee salaries with automatic Kenya tax calculations (PAYE, NHIF, NSSF).</p>
+        <p className="text-muted-foreground">Process employee salaries with automatic Kenya tax calculations (PAYE, NHIF, NSSF, Housing Levy).</p>
       </div>
+
+      {/* Assisted Payroll Disclaimer */}
+      <PayrollDisclaimer />
 
       <PayrollList
         payrollRuns={payrollRuns}
