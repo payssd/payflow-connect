@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -26,34 +26,43 @@ export function TrialCountdown() {
                      !currentOrganization?.subscription_plan;
   const showTrial = isTrialing || isFreePlan;
 
-  // Calculate trial end date
-  const getTrialEndDate = (): Date | null => {
+  // Calculate trial end date (memoized so effects don't loop)
+  const trialEndMs = useMemo(() => {
     if (!currentOrganization) return null;
-    
+
     // If trialing with an explicit end date, use that
     if (isTrialing && currentOrganization.subscription_ends_at) {
-      return new Date(currentOrganization.subscription_ends_at);
+      const ms = new Date(currentOrganization.subscription_ends_at).getTime();
+      return Number.isFinite(ms) ? ms : null;
     }
-    
+
     // For free plan users, calculate trial end from created_at
     if (isFreePlan && currentOrganization.created_at) {
-      const createdAt = new Date(currentOrganization.created_at);
-      const trialEnd = new Date(createdAt);
-      trialEnd.setDate(trialEnd.getDate() + TRIAL_DURATION_DAYS);
-      return trialEnd;
+      const createdMs = new Date(currentOrganization.created_at).getTime();
+      if (!Number.isFinite(createdMs)) return null;
+      return createdMs + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000;
     }
-    
-    return null;
-  };
 
-  const trialEndDate = getTrialEndDate();
+    return null;
+  }, [
+    currentOrganization?.id,
+    currentOrganization?.created_at,
+    currentOrganization?.subscription_ends_at,
+    isTrialing,
+    isFreePlan,
+  ]);
+
+  const trialEndDate = useMemo(() => {
+    if (!trialEndMs) return null;
+    return new Date(trialEndMs);
+  }, [trialEndMs]);
 
   useEffect(() => {
-    if (!showTrial || !trialEndDate) return;
+    if (!showTrial || !trialEndMs) return;
 
     const calculateTimeLeft = () => {
-      const now = new Date();
-      const difference = trialEndDate.getTime() - now.getTime();
+      const now = Date.now();
+      const difference = trialEndMs - now;
 
       if (difference <= 0) {
         setIsExpired(true);
@@ -73,7 +82,7 @@ export function TrialCountdown() {
     const timer = setInterval(calculateTimeLeft, 1000);
 
     return () => clearInterval(timer);
-  }, [showTrial, trialEndDate]);
+  }, [showTrial, trialEndMs]);
 
   // Don't redirect on expiry for now, just show expired state
   // useEffect(() => {
