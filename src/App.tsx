@@ -108,6 +108,7 @@ const App = () => (
                 {/* Settings */}
                 <Route path="/settings/organization" element={<OrganizationSettings />} />
                 <Route path="/settings/gateways" element={<PaymentSettings />} />
+                <Route path="/settings/payments" element={<Navigate to="/settings/gateways" replace />} />
                 <Route path="/settings/subscription" element={<SubscriptionManagement />} />
                 <Route path="/settings/team" element={<TeamSettings />} />
                 <Route path="/settings/profile" element={<ProfileSettings />} />
