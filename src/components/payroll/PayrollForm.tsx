@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,9 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, Users, Calculator, AlertCircle } from 'lucide-react';
+import { Loader2, Users, Calculator } from 'lucide-react';
 import { safeCalculateTax, formatKES } from '@/lib/kenyaTax';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { Employee } from '@/hooks/useEmployees';
 
 const payrollSchema = z.object({
@@ -35,14 +34,7 @@ interface PayrollFormProps {
 
 export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading }: PayrollFormProps) {
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
-  const [preview, setPreview] = useState<{
-    totalGross: number;
-    totalPaye: number;
-    totalNhif: number;
-    totalNssf: number;
-    totalNet: number;
-    count: number;
-  } | null>(null);
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
@@ -60,22 +52,27 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
     },
   });
 
-  const eligibleEmployees = employees.filter(emp => emp.status === 'active' && Number(emp.base_salary) > 0);
-
-  useEffect(() => {
-    // Auto-select all eligible employees
-    setSelectedEmployees(new Set(eligibleEmployees.map(emp => emp.id)));
+  // Memoize eligible employees to prevent recalculation on every render
+  const eligibleEmployees = useMemo(() => {
+    return employees.filter(emp => emp.status === 'active' && Number(emp.base_salary) > 0);
   }, [employees]);
 
+  // Auto-select all eligible employees only once when they first load
   useEffect(() => {
-    // Calculate preview
+    if (eligibleEmployees.length > 0 && !hasAutoSelected) {
+      setSelectedEmployees(new Set(eligibleEmployees.map(emp => emp.id)));
+      setHasAutoSelected(true);
+    }
+  }, [eligibleEmployees, hasAutoSelected]);
+
+  // Calculate preview - memoized to prevent unnecessary recalculations
+  const calculatedPreview = useMemo(() => {
     const selected = eligibleEmployees.filter(emp => selectedEmployees.has(emp.id));
     if (selected.length === 0) {
-      setPreview(null);
-      return;
+      return null;
     }
 
-    const totals = selected.reduce(
+    return selected.reduce(
       (acc, emp) => {
         const gross = Number(emp.base_salary) || 0;
         const tax = safeCalculateTax(gross);
@@ -90,9 +87,14 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
       },
       { totalGross: 0, totalPaye: 0, totalNhif: 0, totalNssf: 0, totalNet: 0, count: 0 }
     );
+  }, [selectedEmployees, eligibleEmployees]);
 
-    setPreview(totals);
-  }, [selectedEmployees, employees]);
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setHasAutoSelected(false);
+    }
+  }, [open]);
 
   const toggleEmployee = (id: string) => {
     const newSet = new Set(selectedEmployees);
@@ -217,7 +219,7 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
           </div>
 
           {/* Preview Summary */}
-          {preview && preview.count > 0 && (
+          {calculatedPreview && calculatedPreview.count > 0 && (
             <Card className="bg-muted/50 border-0">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -229,23 +231,23 @@ export function PayrollForm({ open, onOpenChange, employees, onSubmit, isLoading
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">Gross Pay</p>
-                    <p className="font-medium">{formatKES(preview.totalGross)}</p>
+                    <p className="font-medium">{formatKES(calculatedPreview.totalGross)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">PAYE</p>
-                    <p className="font-medium text-destructive">-{formatKES(preview.totalPaye)}</p>
+                    <p className="font-medium text-destructive">-{formatKES(calculatedPreview.totalPaye)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">NHIF</p>
-                    <p className="font-medium text-destructive">-{formatKES(preview.totalNhif)}</p>
+                    <p className="font-medium text-destructive">-{formatKES(calculatedPreview.totalNhif)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">NSSF</p>
-                    <p className="font-medium text-destructive">-{formatKES(preview.totalNssf)}</p>
+                    <p className="font-medium text-destructive">-{formatKES(calculatedPreview.totalNssf)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Net Pay</p>
-                    <p className="font-bold text-lg text-success">{formatKES(preview.totalNet)}</p>
+                    <p className="font-bold text-lg text-success">{formatKES(calculatedPreview.totalNet)}</p>
                   </div>
                 </div>
               </CardContent>
