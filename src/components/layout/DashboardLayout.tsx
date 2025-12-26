@@ -314,10 +314,12 @@ export function DashboardLayout() {
       {/* Main Content */}
       <main className="lg:pl-64 pt-16">
         <div className="p-4 lg:p-8">
-          {/* Trial Countdown Banner */}
-          <div className="mb-6">
-            <TrialCountdown />
-          </div>
+          {/* Trial Countdown Banner (only where it matters to reduce re-render risk) */}
+          {(location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/settings')) && (
+            <div className="mb-6">
+              <TrialCountdown />
+            </div>
+          )}
           <Outlet />
         </div>
       </main>
