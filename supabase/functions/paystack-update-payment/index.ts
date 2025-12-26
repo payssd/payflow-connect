@@ -178,11 +178,13 @@ Deno.serve(async (req) => {
       console.log('No subscription code available for org:', organizationId);
 
       if (org.subscription_status === 'active') {
+        // Return 200 so the client doesn't surface a generic "non-2xx" error.
         return new Response(
           JSON.stringify({
-            error: 'We could not find your active subscription in Paystack to generate a card-update link. Please contact support to reconnect your subscription.',
+            error: 'We could not find your Paystack subscription to generate a card-update link. To update your card, we may need to run a small card verification first.',
+            needs_payment_setup: true,
           }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -196,7 +198,7 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           email: org.email,
-          amount: 100,
+          amount: 1, // minimal possible charge (1 cent) for card verification
           callback_url: callbackUrl,
           channels: ['card'],
           metadata: {
@@ -282,7 +284,7 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           email: org.email,
-          amount: 100, // Minimal amount for authorization (will be refunded or not charged)
+          amount: 1, // minimal possible charge (1 cent) for card authorization
           callback_url: callbackUrl,
           channels: ['card'],
           metadata: {
