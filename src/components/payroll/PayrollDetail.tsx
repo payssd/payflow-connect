@@ -4,11 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Loader2, CheckCircle, Send } from 'lucide-react';
+import { Loader2, CheckCircle, Send, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatKES } from '@/lib/kenyaTax';
+import { downloadPayslipPdf } from '@/lib/payslipPdf';
+import { useAuth } from '@/contexts/AuthContext';
 import type { PayrollRun, PayrollRunWithItems } from '@/hooks/usePayrollRuns';
-
 interface PayrollDetailProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -18,8 +19,54 @@ interface PayrollDetailProps {
 }
 
 export function PayrollDetail({ open, onOpenChange, payrollRun, getPayrollRunWithItems, onUpdateStatus }: PayrollDetailProps) {
+  const { currentOrganization } = useAuth();
   const [runWithItems, setRunWithItems] = useState<PayrollRunWithItems | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleDownloadPayslip = (item: PayrollRunWithItems['items'][0]) => {
+    if (!currentOrganization || !payrollRun || !item.employee) return;
+
+    downloadPayslipPdf(
+      {
+        name: currentOrganization.name,
+        email: currentOrganization.email,
+        phone: currentOrganization.phone,
+        address: (currentOrganization as any).address || null,
+        country: currentOrganization.country,
+      },
+      {
+        first_name: item.employee.first_name,
+        last_name: item.employee.last_name,
+        employee_number: item.employee.employee_number,
+        job_title: item.employee.job_title,
+        department: item.employee.department,
+        kra_pin: item.employee.kra_pin,
+        nhif_number: item.employee.nhif_number,
+        nssf_number: item.employee.nssf_number,
+      },
+      {
+        run_number: payrollRun.run_number,
+        name: payrollRun.name,
+        pay_period_start: payrollRun.pay_period_start,
+        pay_period_end: payrollRun.pay_period_end,
+        payment_date: payrollRun.payment_date,
+      },
+      {
+        basic_salary: Number(item.basic_salary),
+        housing_allowance: item.housing_allowance,
+        transport_allowance: item.transport_allowance,
+        other_allowances: item.other_allowances,
+        gross_pay: Number(item.gross_pay),
+        paye: item.paye,
+        nhif: item.nhif,
+        nssf: item.nssf,
+        housing_levy: item.housing_levy,
+        other_deductions: item.other_deductions,
+        total_deductions: item.total_deductions,
+        net_pay: Number(item.net_pay),
+      }
+    );
+  };
 
   useEffect(() => {
     if (open && payrollRun) {
@@ -114,6 +161,7 @@ export function PayrollDetail({ open, onOpenChange, payrollRun, getPayrollRunWit
                         <TableHead className="text-right">NHIF</TableHead>
                         <TableHead className="text-right">NSSF</TableHead>
                         <TableHead className="text-right">Net Pay</TableHead>
+                        <TableHead className="w-[80px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -134,6 +182,16 @@ export function PayrollDetail({ open, onOpenChange, payrollRun, getPayrollRunWit
                           <TableCell className="text-right text-destructive">{formatKES(Number(item.nhif))}</TableCell>
                           <TableCell className="text-right text-destructive">{formatKES(Number(item.nssf))}</TableCell>
                           <TableCell className="text-right font-medium text-success">{formatKES(Number(item.net_pay))}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownloadPayslip(item)}
+                              title="Download Payslip"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
