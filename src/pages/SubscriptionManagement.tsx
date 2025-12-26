@@ -248,7 +248,12 @@ export default function SubscriptionManagement() {
         },
       });
 
-      if (error) throw new Error(error.message);
+      console.log('Update payment response:', { data, error });
+
+      if (error) {
+        console.error('Function error:', error);
+        throw new Error(error.message || 'Edge Function returned a non-2xx status code');
+      }
 
       if (data?.error) {
         if (data.redirect) {
@@ -263,7 +268,15 @@ export default function SubscriptionManagement() {
       }
 
       if (data?.link) {
+        console.log('Redirecting to:', data.link);
         window.location.href = data.link;
+      } else if (data?.success) {
+        toast({
+          title: 'Payment method update initiated',
+          description: data.message || 'You will be redirected shortly.',
+        });
+      } else {
+        throw new Error('No redirect URL received');
       }
     } catch (error: any) {
       toast({
