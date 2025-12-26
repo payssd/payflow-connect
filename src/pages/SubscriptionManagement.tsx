@@ -284,13 +284,19 @@ export default function SubscriptionManagement() {
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Plan</p>
               <p className="text-lg font-semibold capitalize">
-                {currentOrganization?.subscription_plan || 'No plan'}
+                {currentOrganization?.subscription_plan 
+                  ? currentOrganization.subscription_plan 
+                  : isTrialing 
+                    ? 'Starter (Trial)' 
+                    : 'No plan'}
               </p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Status</p>
               <p className="text-lg font-semibold capitalize">
-                {currentOrganization?.subscription_status || 'Inactive'}
+                {currentOrganization?.subscription_status === 'trialing' 
+                  ? 'Free Trial' 
+                  : currentOrganization?.subscription_status || 'Inactive'}
               </p>
             </div>
             <div className="space-y-1">
@@ -298,9 +304,13 @@ export default function SubscriptionManagement() {
                 {isTrialing ? 'Trial Ends' : 'Next Billing'}
               </p>
               <p className="text-lg font-semibold">
-                {currentOrganization?.subscription_ends_at
-                  ? format(new Date(currentOrganization.subscription_ends_at), 'MMM d, yyyy')
-                  : '—'}
+                {isTrialing && currentOrganization?.trial_ends_at
+                  ? format(new Date(currentOrganization.trial_ends_at), 'MMM d, yyyy')
+                  : currentOrganization?.subscription_ends_at
+                    ? format(new Date(currentOrganization.subscription_ends_at), 'MMM d, yyyy')
+                    : isTrialing && !currentOrganization?.trial_ends_at
+                      ? format(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), 'MMM d, yyyy')
+                      : '—'}
               </p>
             </div>
           </div>
