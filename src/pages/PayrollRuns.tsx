@@ -95,21 +95,25 @@ function PayrollRunsContent() {
         onUpdateStatus={handleUpdateStatus}
       />
 
-      <PayrollForm
-        open={isFormOpen}
-        onOpenChange={setIsFormOpen}
-        employees={employees}
-        onSubmit={handleSubmit}
-        isLoading={isSubmitting}
-      />
+      {isFormOpen && (
+        <PayrollForm
+          open={isFormOpen}
+          onOpenChange={setIsFormOpen}
+          employees={employees}
+          onSubmit={handleSubmit}
+          isLoading={isSubmitting}
+        />
+      )}
 
-      <PayrollDetail
-        open={isDetailOpen}
-        onOpenChange={setIsDetailOpen}
-        payrollRun={selectedRun}
-        getPayrollRunWithItems={getPayrollRunWithItems}
-        onUpdateStatus={handleUpdateStatus}
-      />
+      {isDetailOpen && selectedRun && (
+        <PayrollDetail
+          open={isDetailOpen}
+          onOpenChange={setIsDetailOpen}
+          payrollRun={selectedRun}
+          getPayrollRunWithItems={getPayrollRunWithItems}
+          onUpdateStatus={handleUpdateStatus}
+        />
+      )}
     </div>
   );
 }
