@@ -24,6 +24,7 @@ interface Organization {
   subscription_plan: 'starter' | 'growth' | 'pro' | null;
   subscription_ends_at: string | null;
   subscription_started_at: string | null;
+  trial_ends_at: string | null;
   created_at: string;
 }
 
