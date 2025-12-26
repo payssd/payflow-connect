@@ -45,9 +45,9 @@ interface CategorySpending {
 }
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-KE', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'KES',
     minimumFractionDigits: 0,
   }).format(amount);
 };
@@ -275,7 +275,7 @@ export default function ExpenseBudgets() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="monthly_limit">Monthly Limit (USD) *</Label>
+                  <Label htmlFor="monthly_limit">Monthly Limit (KES) *</Label>
                   <Input
                     id="monthly_limit"
                     type="number"
