@@ -33,8 +33,11 @@ import {
   Clock,
   Sun,
   Moon,
+  Plus,
+  Crown,
 } from 'lucide-react';
 import { TrialCountdown } from '@/components/trial/TrialCountdown';
+import { AddOrganizationDialog } from '@/components/organization/AddOrganizationDialog';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -61,6 +64,12 @@ export function DashboardLayout() {
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [addOrgDialogOpen, setAddOrgDialogOpen] = useState(false);
+
+  // Check if user can add multiple organizations (Growth or Pro plan)
+  const allowedPlans = ['growth', 'pro'];
+  const canAddOrganization = currentOrganization?.subscription_plan && 
+    allowedPlans.includes(currentOrganization.subscription_plan);
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return 'U';
@@ -176,6 +185,25 @@ export function DashboardLayout() {
                   {org.name}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              {/* Add Organization option - visible to Growth/Pro users, shows upgrade for Starter */}
+              <DropdownMenuItem
+                onClick={() => setAddOrgDialogOpen(true)}
+                className="cursor-pointer"
+              >
+                {canAddOrganization ? (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Organization
+                  </>
+                ) : (
+                  <>
+                    <Crown className="mr-2 h-4 w-4 text-primary" />
+                    <span>Add Organization</span>
+                    <span className="ml-auto text-xs text-primary">Pro</span>
+                  </>
+                )}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -323,6 +351,12 @@ export function DashboardLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Add Organization Dialog */}
+      <AddOrganizationDialog 
+        open={addOrgDialogOpen} 
+        onOpenChange={setAddOrgDialogOpen} 
+      />
     </div>
   );
 }
