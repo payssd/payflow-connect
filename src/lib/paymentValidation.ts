@@ -118,6 +118,28 @@ export const mpesaDarajaSchema = z.object({
   path: ["tillNumber"],
 });
 
+// Pesapal validation schema
+export const pesapalSchema = z.object({
+  isEnabled: z.boolean(),
+  isLiveMode: z.boolean(),
+  consumerKey: z.string()
+    .refine((val) => !val || val.length >= 10, {
+      message: "Consumer Key should be at least 10 characters",
+    }),
+  consumerSecret: z.string()
+    .refine((val) => !val || val.length >= 10, {
+      message: "Consumer Secret should be at least 10 characters",
+    }),
+}).refine((data) => {
+  if (data.isEnabled) {
+    return data.consumerKey && data.consumerSecret;
+  }
+  return true;
+}, {
+  message: "Consumer Key and Secret are required when enabling Pesapal",
+  path: ["consumerKey"],
+});
+
 // Generic gateway validation schema factory for future integrations
 export function createGatewaySchema(config: {
   publicKeyPattern?: RegExp;
@@ -156,7 +178,7 @@ export interface ValidationResult {
 
 // Validate gateway config
 export function validateGatewayConfig(
-  provider: 'paystack' | 'flutterwave' | 'mpesa_daraja',
+  provider: 'paystack' | 'flutterwave' | 'mpesa_daraja' | 'pesapal',
   config: Record<string, unknown>
 ): ValidationResult {
   let schema;
@@ -170,6 +192,9 @@ export function validateGatewayConfig(
       break;
     case 'mpesa_daraja':
       schema = mpesaDarajaSchema;
+      break;
+    case 'pesapal':
+      schema = pesapalSchema;
       break;
     default:
       return { isValid: true, errors: {} };
