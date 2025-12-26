@@ -6,43 +6,48 @@ const plans = [
   {
     name: 'Starter',
     price: '$10',
-    period: '/month',
-    description: 'For small teams',
+    period: '/mo',
+    description: 'Perfect for smaller teams starting their payroll journey',
     icon: Zap,
+    employees: '20 employees',
     features: [
-      'Up to 10 employees',
       'Unlimited invoices',
       'Basic reports',
       'Email support',
+      '1 payment gateway',
     ],
     popular: false,
   },
   {
     name: 'Growth',
     price: '$20',
-    period: '/month',
-    description: 'For growing businesses',
+    period: '/mo',
+    description: 'For growing businesses that need more power',
     icon: Sparkles,
+    employees: 'Up to 50 employees',
     features: [
-      'Up to 50 employees',
-      'Advanced analytics',
-      'Priority support',
-      'Multiple gateways',
+      'Unlimited invoices',
+      'Advanced reports & analytics',
+      'Priority email support',
+      'Multiple payment gateways',
     ],
+    extraFeatures: 2,
     popular: true,
   },
   {
     name: 'Pro',
     price: 'Custom',
     period: '',
-    description: 'For enterprises',
+    description: 'For enterprises with advanced needs',
     icon: Crown,
+    employees: 'Unlimited employees',
     features: [
-      'Unlimited employees',
+      'Unlimited invoices',
+      'Full analytics suite',
       'Dedicated support',
-      'API access',
-      'Custom integrations',
+      'Unlimited payment gateways',
     ],
+    extraFeatures: 4,
     popular: false,
   },
 ];
@@ -89,15 +94,22 @@ export function PricingSection() {
                 
                 <h3 className="text-lg font-medium text-foreground mb-1">
                   {plan.name}
+                  {plan.popular && (
+                    <span className="ml-2 text-xs text-primary">(Most Popular)</span>
+                  )}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   {plan.description}
                 </p>
                 
-                <div className="mb-6">
+                <div className="mb-2">
                   <span className="text-3xl font-semibold text-foreground tabular-nums">{plan.price}</span>
                   <span className="text-muted-foreground text-sm">{plan.period}</span>
                 </div>
+                
+                <p className="text-sm font-medium text-foreground mb-4">
+                  {plan.employees}
+                </p>
 
                 <ul className="space-y-2 mb-6">
                   {plan.features.map((feature, featureIndex) => (
@@ -106,6 +118,11 @@ export function PricingSection() {
                       <span className="text-muted-foreground">{feature}</span>
                     </li>
                   ))}
+                  {plan.extraFeatures && (
+                    <li className="text-sm text-primary font-medium">
+                      +{plan.extraFeatures} more features
+                    </li>
+                  )}
                 </ul>
               </div>
 
