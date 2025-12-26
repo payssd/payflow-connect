@@ -57,13 +57,14 @@ serve(async (req: Request) => {
     }
 
     // Fetch gateway config for the organization
+    // NOTE: table uses `gateway` + `is_active` (not provider/is_enabled)
     const { data: gatewayConfig, error: configError } = await supabase
       .from('payment_gateway_configs')
-      .select('*')
+      .select('gateway, is_active, config')
       .eq('organization_id', invoice.organization_id)
-      .eq('provider', provider)
-      .eq('is_enabled', true)
-      .single();
+      .eq('gateway', provider)
+      .eq('is_active', true)
+      .maybeSingle();
 
     if (configError || !gatewayConfig) {
       console.error("Gateway config error:", configError);
@@ -73,17 +74,15 @@ serve(async (req: Request) => {
       );
     }
 
-    // Get the secret key from Supabase secrets (stored per org)
-    // For now, we'll use the global PAYSTACK_SECRET_KEY or FLUTTERWAVE_SECRET_KEY
-    // In production, you'd store per-org keys securely
-    const secretKey = provider === 'paystack' 
-      ? Deno.env.get("PAYSTACK_SECRET_KEY")
-      : Deno.env.get("FLUTTERWAVE_SECRET_KEY");
+    const config = (gatewayConfig.config || {}) as Record<string, unknown>;
+
+    // Use the org-stored secret key (validated at save time)
+    const secretKey = (config.secretKey as string | undefined) || '';
 
     if (!secretKey) {
       return new Response(
-        JSON.stringify({ error: `${provider} secret key not configured` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: `${provider} secret key is missing. Please re-save your ${provider} settings.` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
