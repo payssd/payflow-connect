@@ -105,7 +105,9 @@ export function PayrollDetail({ open, onOpenChange, payrollRun, getPayrollRunWit
           </DialogTitle>
           <DialogDescription>
             Pay period: {format(new Date(payrollRun.pay_period_start), 'MMM d')} - {format(new Date(payrollRun.pay_period_end), 'MMM d, yyyy')}
-            {' • '}Payment date: {format(new Date(payrollRun.payment_date), 'MMM d, yyyy')}
+            {payrollRun.payment_date && (
+              <>{' • '}Payment date: {format(new Date(payrollRun.payment_date), 'MMM d, yyyy')}</>
+            )}
           </DialogDescription>
         </DialogHeader>
 
