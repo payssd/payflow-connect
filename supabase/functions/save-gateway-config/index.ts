@@ -6,19 +6,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// All supported gateway IDs from the registry
+const SUPPORTED_GATEWAYS = [
+  // Mobile Money
+  'mpesa_daraja', 'airtel_money', 'equitel', 'sasapay', 'tkash',
+  // Payment Aggregators
+  'paystack', 'flutterwave', 'pesapal', 'cellulant_tingg', 'ipay_africa',
+  'jambopay', 'kora', 'dpo_directpay', 'pesaflow', 'xprizo', 'loop_pay',
+  'virtualpay', 'pesawise', 'craft_silicon', 'interswitch',
+  // Bank Transfers
+  'pesalink', 'kenswitch',
+  // International
+  'dlocal', 'unlimint', 'payu',
+  // Developer Tools
+  'africastalking',
+];
+
 interface GatewayConfigRequest {
   organizationId: string;
-  provider: 'paystack' | 'flutterwave' | 'mpesa_daraja';
-  publicKey?: string;
-  secretKey?: string;
-  webhookSecret?: string;
+  provider: string;
   isEnabled: boolean;
   isLiveMode: boolean;
-  // M-Pesa Daraja specific
-  consumerKey?: string;
-  consumerSecret?: string;
-  passkey?: string;
-  tillNumber?: string;
+  // All possible fields from various gateways
+  [key: string]: unknown;
 }
 
 serve(async (req: Request) => {
@@ -79,7 +89,7 @@ serve(async (req: Request) => {
     console.log("User authenticated:", user.id);
 
     const body: GatewayConfigRequest = await req.json();
-    const { organizationId, provider, publicKey, secretKey, webhookSecret, isEnabled, isLiveMode } = body;
+    const { organizationId, provider, isEnabled, isLiveMode, ...restConfig } = body;
 
     console.log("Request body:", { organizationId, provider, isEnabled, isLiveMode });
 
@@ -91,11 +101,11 @@ serve(async (req: Request) => {
       );
     }
 
-    // Validate provider is allowed
-    if (!['paystack', 'flutterwave', 'mpesa_daraja'].includes(provider)) {
+    // Validate provider is in supported list
+    if (!SUPPORTED_GATEWAYS.includes(provider)) {
       console.error("Invalid provider:", provider);
       return new Response(
-        JSON.stringify({ error: "Invalid provider. Must be 'paystack', 'flutterwave', or 'mpesa_daraja'" }),
+        JSON.stringify({ error: `Invalid provider: ${provider}. Gateway not supported.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -129,62 +139,43 @@ serve(async (req: Request) => {
       );
     }
 
-    // Build the config JSON object based on provider
-    let configPayload: Record<string, unknown>;
-    let responseConfig: Record<string, unknown>;
+    // Build the config JSON object dynamically based on what's provided
+    const configPayload: Record<string, unknown> = {
+      is_live_mode: isLiveMode,
+    };
+    
+    const responseConfig: Record<string, unknown> = {
+      provider,
+      isEnabled,
+      isLiveMode,
+    };
 
-    if (provider === 'mpesa_daraja') {
-      const { consumerKey, consumerSecret, passkey, tillNumber } = body;
+    // Process all config fields dynamically
+    // Identify secret fields that need hints
+    const secretFields = ['secretKey', 'consumerSecret', 'passkey', 'webhookSecret', 'ivKey', 'hashKey', 'apiKey', 'xTransKey'];
+    
+    for (const [key, value] of Object.entries(restConfig)) {
+      if (value === undefined || value === null || value === '') continue;
       
-      // Store actual secrets (encrypted at rest by Supabase) plus hints
-      const consumerKeyHint = consumerKey ? `****${consumerKey.slice(-4)}` : null;
-      const consumerSecretHint = consumerSecret ? `****${consumerSecret.slice(-4)}` : null;
-      const passkeyHint = passkey ? `****${passkey.slice(-4)}` : null;
+      const stringValue = String(value);
       
-      configPayload = {
-        consumer_key: consumerKey || null,
-        consumer_secret: consumerSecret || null,
-        passkey: passkey || null,
-        till_number: tillNumber || null,
-        consumer_key_hint: consumerKeyHint,
-        consumer_secret_hint: consumerSecretHint,
-        passkey_hint: passkeyHint,
-        is_live_mode: isLiveMode ? "true" : "false",
-      };
-      
-      responseConfig = {
-        provider,
-        isEnabled,
-        isLiveMode,
-        tillNumber,
-        consumerKeyHint,
-        consumerSecretHint,
-        passkeyHint,
-      };
-    } else {
-      const { publicKey, secretKey, webhookSecret } = body;
-      
-      // Store hints of secret keys (last 4 chars) for display, plus actual secrets for API calls
-      const secretKeyHint = secretKey ? `****${secretKey.slice(-4)}` : null;
-      const webhookSecretHint = webhookSecret ? `****${webhookSecret.slice(-4)}` : null;
-
-      configPayload = {
-        public_key: publicKey || null,
-        secret_key: secretKey || null, // Store actual secret for API calls
-        webhook_secret: webhookSecret || null,
-        secret_key_hint: secretKeyHint,
-        webhook_secret_hint: webhookSecretHint,
-        is_live_mode: isLiveMode,
-      };
-      
-      responseConfig = {
-        provider,
-        isEnabled,
-        isLiveMode,
-        publicKey: publicKey ? `${publicKey.slice(0, 8)}...` : null,
-        secretKeyHint,
-        webhookSecretHint,
-      };
+      // Check if this is a secret field
+      if (secretFields.some(sf => key.toLowerCase().includes(sf.toLowerCase()))) {
+        // Store actual value for API calls
+        configPayload[key] = stringValue;
+        // Store hint for display (last 4 chars)
+        configPayload[`${key}Hint`] = `****${stringValue.slice(-4)}`;
+        responseConfig[`${key}Hint`] = `****${stringValue.slice(-4)}`;
+      } else {
+        // Non-secret fields - store as-is
+        configPayload[key] = stringValue;
+        // For public keys, show partial value
+        if (key.toLowerCase().includes('public') || key.toLowerCase().includes('key')) {
+          responseConfig[key] = stringValue.length > 12 ? `${stringValue.slice(0, 8)}...` : stringValue;
+        } else {
+          responseConfig[key] = stringValue;
+        }
+      }
     }
 
     console.log("Checking for existing gateway config...");
